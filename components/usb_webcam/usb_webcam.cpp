@@ -186,11 +186,14 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps) {
 
   esp_err_t ret = uvc_host_stream_open(&stream_config, pdMS_TO_TICKS(5000), &stream_hdl);
   if (ret != ESP_OK) {
-      ESP_LOGE(TAG, "uvc_host_stream_open failed");
+      ESP_LOGE(TAG, "uvc_host_stream_open failed: %s", esp_err_to_name(ret));
       return ret;
   }
 
   ret = uvc_host_stream_start(stream_hdl);
+  if (ret != ESP_OK) {
+      ESP_LOGE(TAG, "uvc_host_stream_start failed: %s", esp_err_to_name(ret));
+  }
   return ret;
 }
 
