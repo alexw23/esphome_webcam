@@ -278,9 +278,9 @@ void USBWebCam::dump_config() {
       ESP_LOGCONFIG(TAG, "  Resolution: 2560x1920 (QSXGA)");
       break;
   };
-  ESP_LOGCONFIG(TAG, "  Update interval: %u", this->max_update_interval_);
-  ESP_LOGCONFIG(TAG, "  Idle interval: %u", this->idle_update_interval_);
-  ESP_LOGCONFIG(TAG, "  Drop frame size: %u", s_drop_frame_size);
+  ESP_LOGCONFIG(TAG, "  Update interval: %lu", this->max_update_interval_);
+  ESP_LOGCONFIG(TAG, "  Idle interval: %lu", this->idle_update_interval_);
+  ESP_LOGCONFIG(TAG, "  Drop frame size: %lu", s_drop_frame_size);
 
   if (this->is_failed()) {
     ESP_LOGE(TAG, "  Setup Failed: %s", esp_err_to_name(this->init_error_));
