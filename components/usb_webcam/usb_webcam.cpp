@@ -98,11 +98,11 @@ static void stream_callback(const uvc_host_stream_event_data_t *event, void *use
     }
 }
 
-esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_buffer_size) {
+esp_err_t usb_host_drivers_install() {
 #ifdef CONFIG_ESP32_S3_USB_OTG
   bsp_usb_mode_select_host();
   bsp_usb_host_power_mode(BSP_USB_HOST_POWER_MODE_USB_DEV, true);
-#endif  
+#endif
   memset(&s_fb, 0, sizeof(camera_fb_t));
   s_evt_handle = xEventGroupCreate();
   if (s_evt_handle == NULL) {
@@ -120,7 +120,7 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
       ESP_LOGE(TAG, "usb_host_install failed: %s", esp_err_to_name(err));
       return err;
   }
-  
+
   const uvc_host_driver_config_t uvc_driver_config = {
       .driver_task_stack_size = 8 * 1024,
       .driver_task_priority = 6,
@@ -132,6 +132,10 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
       ESP_LOGE(TAG, "uvc_host_install failed: %s", esp_err_to_name(err));
       return err;
   }
+  return ESP_OK;
+}
+
+esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_buffer_size) {
 
   uint16_t frame_width = 0;
   uint16_t frame_height = 0;
@@ -207,9 +211,7 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
 /* ---------------- public API (derivated) ---------------- */
 void USBWebCam::camera_init_task(void *pv) {
   USBWebCam *self = static_cast<USBWebCam *>(pv);
-  ESP_LOGI(TAG, "Waiting 10s before USB init to allow API to connect...");
-  vTaskDelay(pdMS_TO_TICKS(10000));
-  ESP_LOGI(TAG, "Starting USB camera init");
+  ESP_LOGI(TAG, "Starting USB stream open");
   self->init_error_ = esp_camera_init(self->frame_size, 1000 / self->max_update_interval_, self->frame_buffer_size_);
   self->camera_init_done_ = true;
   vTaskDelete(NULL);
@@ -218,6 +220,17 @@ void USBWebCam::camera_init_task(void *pv) {
 void USBWebCam::setup() {
   global_usb_webcam = this;
   this->last_update_ = esp_timer_get_time();
+
+  // Install USB host and UVC driver early (before WiFi claims interrupt slots)
+  esp_err_t err = usb_host_drivers_install();
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "USB driver install failed: %s", esp_err_to_name(err));
+    this->init_error_ = err;
+    this->camera_init_done_ = true;
+    return;
+  }
+
+  // Defer slow stream open (device enumeration) to background task
   xTaskCreate(USBWebCam::camera_init_task, "cam_init", 4096, this, 5, NULL);
 }
 
@@ -249,7 +262,7 @@ void USBWebCam::dump_config() {
   }
 }
 
-float USBWebCam::get_setup_priority() const { return setup_priority::LATE; }
+float USBWebCam::get_setup_priority() const { return setup_priority::BUS; }
 
 /* ---------------- public API (specific) ---------------- */
 void USBWebCam::start_stream(camera::CameraRequester requester) {
