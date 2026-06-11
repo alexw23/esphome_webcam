@@ -156,6 +156,8 @@ async def to_code(config):
         "CONFIG_USB_OTG_SUPPORTED": True,
         "CONFIG_SOC_USB_OTG_SUPPORTED": True,
         "CONFIG_SPIRAM_USE_MALLOC": True, # buffers are big, better let everyone allocate PSRAM
+        "CONFIG_WIFI_IRAM_OPT": False,    # free up IRAM interrupt slots for USB host
+        "CONFIG_WIFI_RX_IRAM_OPT": False, # free up IRAM interrupt slots for USB host
     }.items():
         add_idf_sdkconfig_option(d, v)
 
