@@ -116,7 +116,11 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps) {
       .skip_phy_setup = false,
       .intr_flags = ESP_INTR_FLAG_LOWMED,
   };
-  usb_host_install(&host_config); // Expected to fail if already installed, so ignoring error
+  esp_err_t err = usb_host_install(&host_config);
+  if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+      ESP_LOGE(TAG, "usb_host_install failed: %s", esp_err_to_name(err));
+      return err;
+  }
   
   const uvc_host_driver_config_t uvc_driver_config = {
       .driver_task_stack_size = 6 * 1024,
@@ -124,7 +128,11 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps) {
       .xCoreID = tskNO_AFFINITY,
       .create_background_task = true,
   };
-  uvc_host_install(&uvc_driver_config); // Ignoring error if already installed
+  err = uvc_host_install(&uvc_driver_config);
+  if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+      ESP_LOGE(TAG, "uvc_host_install failed: %s", esp_err_to_name(err));
+      return err;
+  }
 
   uint16_t frame_width = 0;
   uint16_t frame_height = 0;
