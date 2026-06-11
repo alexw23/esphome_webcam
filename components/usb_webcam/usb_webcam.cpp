@@ -183,9 +183,17 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
       },
   };
 
-  esp_err_t ret = uvc_host_stream_open(&stream_config, pdMS_TO_TICKS(5000), &stream_hdl);
+  esp_err_t ret = ESP_ERR_NOT_FOUND;
+  for (int attempt = 1; attempt <= 5 && ret != ESP_OK; attempt++) {
+      ESP_LOGI(TAG, "uvc_host_stream_open attempt %d/5...", attempt);
+      ret = uvc_host_stream_open(&stream_config, pdMS_TO_TICKS(10000), &stream_hdl);
+      if (ret != ESP_OK) {
+          ESP_LOGW(TAG, "uvc_host_stream_open attempt %d failed: %s", attempt, esp_err_to_name(ret));
+          vTaskDelay(pdMS_TO_TICKS(2000));
+      }
+  }
   if (ret != ESP_OK) {
-      ESP_LOGE(TAG, "uvc_host_stream_open failed: %s", esp_err_to_name(ret));
+      ESP_LOGE(TAG, "uvc_host_stream_open failed after 5 attempts: %s", esp_err_to_name(ret));
       return ret;
   }
 
