@@ -140,7 +140,7 @@ async def to_code(config):
     # assert(CORE.using_esp_idf)
     add_idf_component(
             name="usb_stream",
-            ref="v2.0",
+            ref="master",
             repo="https://github.com/espressif/esp-iot-solution.git",
             path="components/usb/usb_stream"
     )
