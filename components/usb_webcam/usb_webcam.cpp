@@ -98,7 +98,7 @@ static void stream_callback(const uvc_host_stream_event_data_t *event, void *use
     }
 }
 
-esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps) {
+esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_buffer_size) {
 #ifdef CONFIG_ESP32_S3_USB_OTG
   bsp_usb_mode_select_host();
   bsp_usb_host_power_mode(BSP_USB_HOST_POWER_MODE_USB_DEV, true);
@@ -122,7 +122,7 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps) {
   }
   
   const uvc_host_driver_config_t uvc_driver_config = {
-      .driver_task_stack_size = 6 * 1024,
+      .driver_task_stack_size = 8 * 1024,
       .driver_task_priority = 6,
       .xCoreID = tskNO_AFFINITY,
       .create_background_task = true,
@@ -175,7 +175,7 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps) {
       },
       .advanced = {
           .number_of_frame_buffers = 3,
-          .frame_size = 46 * 1024,
+          .frame_size = frame_buffer_size,
           .frame_heap_caps = MALLOC_CAP_SPIRAM,
           .number_of_urbs = 3,
           .urb_size = 4 * 1024,
@@ -206,7 +206,7 @@ void USBWebCam::setup() {
   this->last_update_ = esp_timer_get_time();
 
   /* initialize camera */
-  esp_err_t err = esp_camera_init(this->frame_size, 1000/this->max_update_interval_); // mui=1000/fps. error starts with 60 fps but it is unrealistic already
+  esp_err_t err = esp_camera_init(this->frame_size, 1000/this->max_update_interval_, this->frame_buffer_size_); // mui=1000/fps. error starts with 60 fps but it is unrealistic already
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "Setup Failed: %s", esp_err_to_name(err));
     this->init_error_ = err;
@@ -316,6 +316,7 @@ bool USBWebCam::can_return_image_() const { return this->current_image_.use_coun
 
 void USBWebCam::set_frame_size(USBWebCamFrameSize size) { this->frame_size = size; }
 void USBWebCam::set_drop_size(uint32_t drop_size) { s_drop_frame_size = drop_size; }
+void USBWebCam::set_frame_buffer_size(uint32_t frame_buffer_size) { this->frame_buffer_size_ = frame_buffer_size; }
 void USBWebCam::set_max_update_interval(uint32_t max_update_interval) {
   this->max_update_interval_ = max_update_interval;
 }

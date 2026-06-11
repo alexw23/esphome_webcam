@@ -77,6 +77,7 @@ FRAME_SIZES = {
 CONF_MAX_FRAMERATE = "max_framerate"
 CONF_IDLE_FRAMERATE = "idle_framerate"
 CONF_DROP_FRAME_SIZE = "drop_frame_size"
+CONF_FRAME_BUFFER_SIZE = "frame_buffer_size"
 
 # stream trigger
 CONF_ON_STREAM_START = "on_stream_start"
@@ -98,6 +99,9 @@ CONFIG_SCHEMA = cv.ENTITY_BASE_SCHEMA.extend(
         ),
         cv.Optional(CONF_DROP_FRAME_SIZE, default="7000"): cv.All(
             cv.int_range(min=0, max=100000)
+        ),
+        cv.Optional(CONF_FRAME_BUFFER_SIZE, default="65536"): cv.All(
+            cv.int_range(min=10240, max=524288)
         ),
         cv.Optional(CONF_ON_STREAM_START): automation.validate_automation(
             {
@@ -133,6 +137,7 @@ async def to_code(config):
     else:
         cg.add(var.set_idle_update_interval(1000 / config[CONF_IDLE_FRAMERATE]))
     cg.add(var.set_drop_size(config[CONF_DROP_FRAME_SIZE]))
+    cg.add(var.set_frame_buffer_size(config[CONF_FRAME_BUFFER_SIZE]))
     cg.add(var.set_frame_size(config[CONF_RESOLUTION]))
 
     cg.add_define("USE_USB_WEBCAM")

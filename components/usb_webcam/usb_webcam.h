@@ -104,6 +104,7 @@ class USBWebCam : public camera::Camera {
   /* -- image */
   void set_frame_size(USBWebCamFrameSize size);
   void set_drop_size(uint32_t drop_size);
+  void set_frame_buffer_size(uint32_t frame_buffer_size);
   /* -- framerates */
   void set_max_update_interval(uint32_t max_update_interval);
   void set_idle_update_interval(uint32_t idle_update_interval);
@@ -136,6 +137,7 @@ class USBWebCam : public camera::Camera {
   /* attributes */
   /* camera configuration */
   USBWebCamFrameSize frame_size;
+  uint32_t frame_buffer_size_{65536};
   /* -- framerates */
   uint32_t max_update_interval_{1000};
   uint32_t idle_update_interval_{15000};
