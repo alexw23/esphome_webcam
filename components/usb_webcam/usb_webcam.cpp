@@ -226,6 +226,12 @@ void USBWebCam::setup() {
   gpio_reset_pin(GPIO_NUM_15);
   gpio_set_direction(GPIO_NUM_15, GPIO_MODE_OUTPUT);
 
+  // Enable verbose logging for UVC subsystem to diagnose enumeration issues
+  esp_log_level_set("uvc", ESP_LOG_VERBOSE);
+  esp_log_level_set("uvc-control", ESP_LOG_VERBOSE);
+  esp_log_level_set("HCD DWC", ESP_LOG_VERBOSE);
+  esp_log_level_set("USB HOST", ESP_LOG_VERBOSE);
+
   // Install USB host and UVC driver early (before WiFi claims interrupt slots)
   esp_err_t err = usb_host_drivers_install();
   if (err != ESP_OK) {
