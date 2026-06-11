@@ -113,7 +113,7 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
   ESP_LOGI(TAG, "Installing USB Host");
   const usb_host_config_t host_config = {
       .skip_phy_setup = false,
-      .intr_flags = ESP_INTR_FLAG_LOWMED,
+      .intr_flags = 0,
   };
   esp_err_t err = usb_host_install(&host_config);
   if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
