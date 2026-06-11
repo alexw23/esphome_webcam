@@ -49,12 +49,11 @@ void esp_camera_fb_return(camera_fb_t *fb)
 static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
 {
     if (!(xEventGroupGetBits(s_evt_handle) & BIT0_FRAME_START)) {
-    
-    // Once we accept the frame, we don't want to accept another until requested
-    xEventGroupClearBits(s_evt_handle, BIT0_FRAME_START | BIT2_NEW_FRAME_END);
-
         return true;
     }
+
+    // Once we accept the frame, we don't want to accept another until requested
+    xEventGroupClearBits(s_evt_handle, BIT0_FRAME_START | BIT2_NEW_FRAME_END);
     ESP_LOGV(TAG, "uvc frame w = %d, h = %d, length = %u",
              frame->vs_format.h_res, frame->vs_format.v_res, frame->data_len);
 
