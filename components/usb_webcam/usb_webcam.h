@@ -132,7 +132,7 @@ class USBWebCam : public camera::Camera {
   bool has_requested_image_() const;
   bool can_return_image_() const;
 
-  static void framebuffer_task(void *pv);
+  static void camera_init_task(void *pv);
 
   /* attributes */
   /* camera configuration */

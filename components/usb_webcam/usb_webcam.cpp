@@ -197,7 +197,7 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
 }
 
 /* ---------------- public API (derivated) ---------------- */
-static void camera_init_task(void *pv) {
+void USBWebCam::camera_init_task(void *pv) {
   USBWebCam *self = static_cast<USBWebCam *>(pv);
   self->init_error_ = esp_camera_init(self->frame_size, 1000 / self->max_update_interval_, self->frame_buffer_size_);
   self->camera_init_done_ = true;
@@ -207,7 +207,7 @@ static void camera_init_task(void *pv) {
 void USBWebCam::setup() {
   global_usb_webcam = this;
   this->last_update_ = esp_timer_get_time();
-  xTaskCreate(camera_init_task, "cam_init", 4096, this, 5, NULL);
+  xTaskCreate(USBWebCam::camera_init_task, "cam_init", 4096, this, 5, NULL);
 }
 
 void USBWebCam::loop() {
