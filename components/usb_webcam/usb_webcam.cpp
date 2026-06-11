@@ -13,6 +13,7 @@
 #endif
 
 #include "esphome/core/log.h"
+#include "driver/gpio.h"
 
 #include <freertos/event_groups.h>
 #include <freertos/task.h>
@@ -221,6 +222,10 @@ void USBWebCam::setup() {
   global_usb_webcam = this;
   this->last_update_ = esp_timer_get_time();
 
+  // Configure status LED
+  gpio_reset_pin(GPIO_NUM_15);
+  gpio_set_direction(GPIO_NUM_15, GPIO_MODE_OUTPUT);
+
   // Install USB host and UVC driver early (before WiFi claims interrupt slots)
   esp_err_t err = usb_host_drivers_install();
   if (err != ESP_OK) {
@@ -239,10 +244,20 @@ void USBWebCam::loop() {
   if (!this->camera_ready_) {
     if (this->init_error_ != ESP_OK) {
       ESP_LOGE(TAG, "Setup Failed: %s", esp_err_to_name(this->init_error_));
+      // Fast blink = error (10 times)
+      for (int i = 0; i < 10; i++) {
+        gpio_set_level(GPIO_NUM_15, 1); vTaskDelay(pdMS_TO_TICKS(100));
+        gpio_set_level(GPIO_NUM_15, 0); vTaskDelay(pdMS_TO_TICKS(100));
+      }
       this->mark_failed();
     } else {
       ESP_LOGI(TAG, "Camera ready");
       this->camera_ready_ = true;
+      // Slow blink = success (3 times)
+      for (int i = 0; i < 3; i++) {
+        gpio_set_level(GPIO_NUM_15, 1); vTaskDelay(pdMS_TO_TICKS(500));
+        gpio_set_level(GPIO_NUM_15, 0); vTaskDelay(pdMS_TO_TICKS(500));
+      }
     }
   }
   if (this->has_requested_image_() || this->stream_requesters_) {
