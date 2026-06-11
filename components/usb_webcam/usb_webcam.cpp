@@ -122,6 +122,16 @@ esp_err_t usb_host_drivers_install() {
       return err;
   }
 
+  xTaskCreate([](void *arg) {
+      while (true) {
+          uint32_t event_flags;
+          usb_host_lib_handle_events(portMAX_DELAY, &event_flags);
+          if (event_flags & USB_HOST_LIB_EVENT_FLAGS_NO_CLIENTS) {
+              usb_host_device_free_all();
+          }
+      }
+  }, "usb_events", 4096, NULL, 5, NULL);
+
   const uvc_host_driver_config_t uvc_driver_config = {
       .driver_task_stack_size = 8 * 1024,
       .driver_task_priority = 6,
