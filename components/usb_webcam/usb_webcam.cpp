@@ -157,7 +157,7 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps) {
       .vs_format = {
           .h_res = frame_width,
           .v_res = frame_height,
-          .fps = fps, // will be rounded to standard 5/10/15 depending on cam capabilities
+          .fps = (uint32_t)fps, // will be rounded to standard 5/10/15 depending on cam capabilities
           .format = UVC_VS_FORMAT_MJPEG,
       },
       .advanced = {
@@ -200,7 +200,7 @@ void USBWebCam::setup() {
 
 void USBWebCam::loop() {
   if (this->has_requested_image_() || this->stream_requesters_) {
-    request_image(camera::CAMERA_REQUEST_INTERNAL);
+    request_image(camera::IDLE);
   }
 }
 
@@ -268,7 +268,7 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
   std::shared_ptr<USBWebCamImage> image = std::make_shared<USBWebCamImage>(fb, this->single_requesters_);
 
   for (auto *listener : this->listeners_) {
-    listener->on_new_image(image);
+    listener->on_camera_image(image);
   }
 
   this->current_image_ = image;
