@@ -141,8 +141,7 @@ async def to_code(config):
     add_idf_component(
             name="usb_host_uvc",
             repo="https://github.com/espressif/esp-usb.git",
-            path="host/class/uvc/usb_host_uvc",
-            refresh=True
+            path="host/class/uvc/usb_host_uvc"
     )
     # no need in cg.add_library("espressif/esp32-camera", "1.0.0")
     # esp_camera.h and sensor.h are taken from it directly
