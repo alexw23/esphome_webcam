@@ -33,6 +33,8 @@ static uvc_host_stream_hdl_t stream_hdl = NULL;
 
 camera_fb_t *esp_camera_fb_get()
 {
+    // Clear out any old flags before we wait
+    xEventGroupClearBits(s_evt_handle, BIT1_NEW_FRAME_START | BIT2_NEW_FRAME_END);
     xEventGroupSetBits(s_evt_handle, BIT0_FRAME_START);
     xEventGroupWaitBits(s_evt_handle, BIT1_NEW_FRAME_START, true, true, portMAX_DELAY);
     return &s_fb;
@@ -47,6 +49,10 @@ void esp_camera_fb_return(camera_fb_t *fb)
 static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
 {
     if (!(xEventGroupGetBits(s_evt_handle) & BIT0_FRAME_START)) {
+    
+    // Once we accept the frame, we don't want to accept another until requested
+    xEventGroupClearBits(s_evt_handle, BIT0_FRAME_START | BIT2_NEW_FRAME_END);
+
         return true;
     }
     ESP_LOGV(TAG, "uvc frame w = %d, h = %d, length = %u",
