@@ -197,25 +197,30 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
 }
 
 /* ---------------- public API (derivated) ---------------- */
+static void camera_init_task(void *pv) {
+  USBWebCam *self = static_cast<USBWebCam *>(pv);
+  self->init_error_ = esp_camera_init(self->frame_size, 1000 / self->max_update_interval_, self->frame_buffer_size_);
+  self->camera_init_done_ = true;
+  vTaskDelete(NULL);
+}
+
 void USBWebCam::setup() {
-  esp_log_level_set("*", ESP_LOG_VERBOSE);
-  esp_log_level_set(TAG, ESP_LOG_VERBOSE);
   global_usb_webcam = this;
-
-  /* initialize time to now */
   this->last_update_ = esp_timer_get_time();
-
-  /* initialize camera */
-  esp_err_t err = esp_camera_init(this->frame_size, 1000/this->max_update_interval_, this->frame_buffer_size_); // mui=1000/fps. error starts with 60 fps but it is unrealistic already
-  if (err != ESP_OK) {
-    ESP_LOGE(TAG, "Setup Failed: %s", esp_err_to_name(err));
-    this->init_error_ = err;
-    this->mark_failed();
-    return;
-  }
+  xTaskCreate(camera_init_task, "cam_init", 4096, this, 5, NULL);
 }
 
 void USBWebCam::loop() {
+  if (!this->camera_init_done_) return;
+  if (!this->camera_ready_) {
+    if (this->init_error_ != ESP_OK) {
+      ESP_LOGE(TAG, "Setup Failed: %s", esp_err_to_name(this->init_error_));
+      this->mark_failed();
+    } else {
+      ESP_LOGI(TAG, "Camera ready");
+      this->camera_ready_ = true;
+    }
+  }
   if (this->has_requested_image_() || this->stream_requesters_) {
     request_image(camera::IDLE);
   }
