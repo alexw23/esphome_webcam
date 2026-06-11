@@ -157,7 +157,7 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps) {
       .vs_format = {
           .h_res = frame_width,
           .v_res = frame_height,
-          .fps = (uint32_t)fps, // will be rounded to standard 5/10/15 depending on cam capabilities
+          .fps = (float)fps, // will be rounded to standard 5/10/15 depending on cam capabilities
           .format = UVC_VS_FORMAT_MJPEG,
       },
       .advanced = {
