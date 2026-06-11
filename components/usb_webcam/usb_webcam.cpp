@@ -182,7 +182,8 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps) {
 
 /* ---------------- public API (derivated) ---------------- */
 void USBWebCam::setup() {
-  //esp_log_level_set(TAG, ESP_LOG_DEBUG);
+  esp_log_level_set("*", ESP_LOG_VERBOSE);
+  esp_log_level_set(TAG, ESP_LOG_VERBOSE);
   global_usb_webcam = this;
 
   /* initialize time to now */
