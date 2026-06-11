@@ -224,9 +224,13 @@ void USBWebCam::loop() {
 void USBWebCam::dump_config() {
   ESP_LOGCONFIG(TAG, "USB WebCam:");
   ESP_LOGCONFIG(TAG, "  Frame Size: %d", this->frame_size);
+  ESP_LOGCONFIG(TAG, "  Frame Buffer Size: %" PRIu32, this->frame_buffer_size_);
   ESP_LOGCONFIG(TAG, "  Max Update Interval: %" PRIu32, this->max_update_interval_);
   ESP_LOGCONFIG(TAG, "  Idle Update Interval: %" PRIu32, this->idle_update_interval_);
   ESP_LOGCONFIG(TAG, "  Stream Requesters: %d", this->stream_requesters_);
+  if (this->init_error_ != ESP_OK) {
+    ESP_LOGCONFIG(TAG, "  Init Error: %s", esp_err_to_name(this->init_error_));
+  }
 }
 
 float USBWebCam::get_setup_priority() const { return setup_priority::LATE; }
