@@ -139,10 +139,10 @@ async def to_code(config):
 
     # assert(CORE.using_esp_idf)
     add_idf_component(
-            name="usb_stream",
-            ref="v2.0",
-            repo="https://github.com/espressif/esp-iot-solution.git",
-            path="components/usb/usb_stream"
+            name="usb_host_uvc",
+            repo="https://github.com/espressif/esp-usb.git",
+            path="host/class/uvc/usb_host_uvc",
+            refresh=True
     )
     # no need in cg.add_library("espressif/esp32-camera", "1.0.0")
     # esp_camera.h and sensor.h are taken from it directly
@@ -152,36 +152,6 @@ async def to_code(config):
         "CONFIG_USB_OTG_SUPPORTED": True,
         "CONFIG_SOC_USB_OTG_SUPPORTED": True,
         "CONFIG_SPIRAM_USE_MALLOC": True, # buffers are big, better let everyone allocate PSRAM
-        #
-        # USB Stream
-        #
-        #"CONFIG_USB_STREAM_QUICK_START": True,
-        "CONFIG_UVC_GET_DEVICE_DESC": True,
-        "CONFIG_UVC_GET_CONFIG_DESC": True,
-        "CONFIG_UVC_PRINT_DESC": True,
-        "CONFIG_USB_PRE_ALLOC_CTRL_TRANSFER_URB": True,
-        "CONFIG_USB_PROC_TASK_PRIORITY": 2,
-        #"CONFIG_USB_PROC_TASK_CORE": 1,
-        "CONFIG_USB_PROC_TASK_STACK_SIZE": 3072,
-        "CONFIG_USB_WAITING_AFTER_CONN_MS": 50,
-        "CONFIG_USB_ENUM_FAILED_RETRY": True,
-        "CONFIG_USB_ENUM_FAILED_RETRY_COUNT": 10,
-        "CONFIG_USB_ENUM_FAILED_RETRY_DELAY_MS": 200,
-        #
-        # UVC Stream Config
-        #
-        "CONFIG_SAMPLE_PROC_TASK_PRIORITY": 0,
-        #"CONFIG_SAMPLE_PROC_TASK_CORE": 0,
-        "CONFIG_SAMPLE_PROC_TASK_STACK_SIZE": 3072,
-        "CONFIG_UVC_PRINT_PROBE_RESULT": True,
-        "CONFIG_UVC_CHECK_BULK_JPEG_HEADER": True,
-        "CONFIG_UVC_DROP_OVERFLOW_FRAME": True,
-        "CONFIG_UVC_DROP_NO_EOF_FRAME": True,
-        "CONFIG_NUM_BULK_STREAM_URBS": 2,
-        "CONFIG_NUM_BULK_BYTES_PER_URB": 2048,
-        "CONFIG_NUM_ISOC_UVC_URBS": 3,
-        "CONFIG_NUM_PACKETS_PER_URB": 4,
-        # end of UVC Stream Config
     }.items():
         add_idf_sdkconfig_option(d, v)
 

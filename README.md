@@ -4,13 +4,13 @@
 This repository contains [external components](https://esphome.io/components/external_components.html) for [ESPHome](https://esphome.io/) that enable web camera connected via USB OTG port of ESP32 S2/S3 family of microcontrollers.
 
 ## Supported video devices
-Not every USB video device can work with ESP devices due to their limited capabilities. E.g. only USB1.1 full-speed mode and MJPEG format are supported along with limitations on max bandwidth and max packet size (as requested by the video device). Please refer to the [documentation](https://docs.espressif.com/projects/esp-iot-solution/en/latest/usb/usb_host/usb_stream.html#usb-stream-user-guide) for details.
+Not every USB video device can work with ESP devices due to their limited capabilities. E.g. only USB1.1 full-speed mode and MJPEG format are supported along with limitations on max bandwidth and max packet size (as requested by the video device). Please refer to the [documentation](https://github.com/espressif/esp-usb/tree/master/host/class/uvc/usb_host_uvc) for details.
 
 ## Power supply
 ESP32-S3 DevKitC-1 or similar boards do not provide enough power for USB devices. It must be provided externally or via your own schematics.
 
 ## Memory, PSRAM
-usb_stream requires a lot of video buffers. Current setting is 256K just for transfer buffers. Thus, the ESP32-S2/S3 device has to have PSRAM connected and enabled, e.g.:
+usb_host_uvc requires a lot of video buffers. Current setting is 256K just for transfer buffers. Thus, the ESP32-S2/S3 device has to have PSRAM connected and enabled, e.g.:
 ```yaml
 psram:
   mode: quad
@@ -18,7 +18,7 @@ psram:
 ```
 
 ## ESP-IDF framework mode
-The webcam component uses `usb_stream` component of [esp-iot-solution](https://github.com/espressif/esp-iot-solution/) library, which is based on ESP-IDF framework. The following yaml enables `esp-idf` mode for ESP32-S3 DevKitC-1 board along with correct flash mode:
+The webcam component uses the `usb_host_uvc` component of the [esp-usb](https://github.com/espressif/esp-usb/) library, which is based on ESP-IDF framework. The following yaml enables `esp-idf` mode for ESP32-S3 DevKitC-1 board along with correct flash mode:
 ```yaml
 esphome:
   platformio_options:
