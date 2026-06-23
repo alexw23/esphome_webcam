@@ -142,7 +142,7 @@ async def to_code(config):
 
     cg.add_define("USE_USB_WEBCAM")
 
-    # assert(CORE.using_esp_idf)
+    # assert(CORE.is_esp_idf)
     add_idf_component(
             name="usb_host_uvc",
             repo="https://github.com/espressif/esp-usb.git",
