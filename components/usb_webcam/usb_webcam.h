@@ -100,6 +100,10 @@ class USBWebCam : public camera::Camera {
  public:
   USBWebCam();
 
+  int last_open_ret_ = -999;
+  int open_attempts_ = 0;
+  bool stream_started_ = false;
+
   /* setters */
   /* -- image */
   void set_frame_size(USBWebCamFrameSize size);
