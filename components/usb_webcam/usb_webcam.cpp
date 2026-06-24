@@ -232,6 +232,10 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
 /* ---------------- public API (derivated) ---------------- */
 void USBWebCam::camera_init_task(void *pv) {
   USBWebCam *self = static_cast<USBWebCam *>(pv);
+
+  // -- NEW: Sleep for 15 seconds so WiFi and Logger can connect --
+  vTaskDelay(pdMS_TO_TICKS(25000));
+
   ESP_LOGI(TAG, "Starting USB stream open");
   self->init_error_ = esp_camera_init(self->frame_size, 1000 / self->max_update_interval_, self->frame_buffer_size_);
   self->camera_init_done_ = true;
