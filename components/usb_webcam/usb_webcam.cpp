@@ -358,7 +358,7 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
   }
   camera_fb_t *fb = esp_camera_fb_get();
   if (fb == nullptr) {
-    ESP_LOGE(TAG, "Got nullptr returning from esp_camera_fb_get()");
+    ESP_LOGE(TAG, "Got nullptr - returning from esp_camera_fb_get()");
     return;
   }
   // ESP_LOGI(TAG, "fb %p, len %u, wh %ux%u", fb->buf, fb->len, fb->width, fb->height);
