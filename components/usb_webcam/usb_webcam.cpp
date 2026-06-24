@@ -34,10 +34,15 @@ static uvc_host_stream_hdl_t stream_hdl = NULL;
 
 camera_fb_t *esp_camera_fb_get()
 {
-    // Clear out any old flags before we wait
     xEventGroupClearBits(s_evt_handle, BIT1_NEW_FRAME_START | BIT2_NEW_FRAME_END);
     xEventGroupSetBits(s_evt_handle, BIT0_FRAME_START);
-    xEventGroupWaitBits(s_evt_handle, BIT1_NEW_FRAME_START, true, true, portMAX_DELAY);
+    // Was portMAX_DELAY — now times out after 1s so the main loop can't hang
+    EventBits_t bits = xEventGroupWaitBits(s_evt_handle, BIT1_NEW_FRAME_START, true, true, pdMS_TO_TICKS(1000));
+    if (!(bits & BIT1_NEW_FRAME_START)) {
+        // Clear our request flag so we don't leave the camera task half-handshaked
+        xEventGroupClearBits(s_evt_handle, BIT0_FRAME_START);
+        return nullptr;
+    }
     return &s_fb;
 }
 
@@ -72,12 +77,13 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
         s_fb.format = PIXFORMAT_JPEG;
         xEventGroupSetBits(s_evt_handle, BIT1_NEW_FRAME_START);
         ESP_LOGV(TAG, "send frame length %u", frame->data_len);
-        xEventGroupWaitBits(s_evt_handle, BIT2_NEW_FRAME_END, true, true, portMAX_DELAY);
+        // Was portMAX_DELAY — bound it so a dead consumer can't deadlock the UVC task
+        xEventGroupWaitBits(s_evt_handle, BIT2_NEW_FRAME_END, true, true, pdMS_TO_TICKS(1000));
         ESP_LOGV(TAG, "send frame length %u done", frame->data_len);
         break;
     default:
-        ESP_LOGW(TAG, "Format not supported");
-        assert(0);
+        ESP_LOGW(TAG, "Format not supported, dropping frame");
+        return true;  // was assert(0) — never crash the device over a stray frame
         break;
     }
     return true;
@@ -329,6 +335,9 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
 
   esp_err_t err = ESP_OK;
 
+  if (stream_hdl == NULL) {
+    return;  // camera disconnected, nothing to request
+  }
   camera_fb_t *fb = esp_camera_fb_get();
   if (fb == nullptr) {
     ESP_LOGE(TAG, "Got nullptr returning from esp_camera_fb_get()");
