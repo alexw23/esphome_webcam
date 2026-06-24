@@ -101,6 +101,7 @@ class USBWebCam : public camera::Camera {
   USBWebCam();
 
   int last_open_ret_ = -999;
+  int last_start_ret_ = -999;
   int open_attempts_ = 0;
   bool stream_started_ = false;
 
