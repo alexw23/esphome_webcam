@@ -68,20 +68,25 @@ void esp_camera_fb_return(camera_fb_t *fb)
 
 static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
 {
-    // 1. Drop frames that are too small or wrong format
-    if (frame->data_len < s_drop_frame_size || frame->vs_format.format != UVC_VS_FORMAT_MJPEG) {
-        return true; // Return TRUE to tell driver: "I don't want this, recycle it"
+    // Log if it's the wrong format
+    if (frame->vs_format.format != UVC_VS_FORMAT_MJPEG) {
+        ESP_LOGV(TAG, "Frame dropped: Not MJPEG. Format enum is %d", frame->vs_format.format);
+        return true; 
     }
 
-    // 2. Try to push to the queue
+    // Log if it's too small
+    if (frame->data_len < s_drop_frame_size) {
+        ESP_LOGV(TAG, "Frame dropped: Too small. Size is %" PRIu32 " bytes", frame->data_len);
+        return true; 
+    }
+
     uvc_host_frame_t *frame_copy = (uvc_host_frame_t *)frame; 
     if (xQueueSendToBack(s_frame_queue, &frame_copy, 0) == pdPASS) {
-        // Success!
-        return false; // Return FALSE to tell driver: "I am holding this, do not overwrite"
+        ESP_LOGI(TAG, "SUCCESS! Frame queued. Size: %" PRIu32, frame->data_len);
+        return false; 
     }
 
-    // 3. If queue is full, we drop the frame
-    ESP_LOGV(TAG, "Queue full, dropping frame");
+    ESP_LOGW(TAG, "Queue full, dropping valid MJPEG frame");
     return true; 
 }
 
