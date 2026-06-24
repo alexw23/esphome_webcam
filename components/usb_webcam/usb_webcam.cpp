@@ -200,16 +200,6 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
 
   esp_err_t ret = ESP_ERR_NOT_FOUND;
   for (int attempt = 1; attempt <= 5 && ret != ESP_OK; attempt++) {
-      // Enumerate available formats
-      uvc_host_stream_format_t fmt;
-      int index = 0;
-      ESP_LOGI(TAG, "Camera supported formats:");
-      while (uvc_host_get_stream_format(0, 0, index, &fmt) == ESP_OK) {
-          ESP_LOGI(TAG, "  [%d] %dx%d @ %dfps format=%d", 
-              index, fmt.h_res, fmt.v_res, fmt.fps, fmt.format);
-          index++;
-      }
-
       ESP_LOGI(TAG, "uvc_host_stream_open attempt %d/5...", attempt);
       ret = uvc_host_stream_open(&stream_config, pdMS_TO_TICKS(10000), &stream_hdl);
       if (ret != ESP_OK) {
