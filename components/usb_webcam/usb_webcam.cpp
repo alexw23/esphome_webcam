@@ -130,11 +130,11 @@ esp_err_t usb_host_drivers_install() {
               usb_host_device_free_all();
           }
       }
-  }, "usb_events", 4096, NULL, 5, NULL, 0);  // core 0
+  }, "usb_events", 4096, NULL, 4, NULL, 0);  // core 0
 
   const uvc_host_driver_config_t uvc_driver_config = {
       .driver_task_stack_size = 8 * 1024,
-      .driver_task_priority = 6,
+      .driver_task_priority = 4,
       .xCoreID = 0,
       .create_background_task = true,
   };
@@ -252,7 +252,7 @@ void USBWebCam::setup() {
   }
 
   // Defer slow stream open (device enumeration) to background task
-  xTaskCreate(USBWebCam::camera_init_task, "cam_init", 4096, this, 5, NULL);
+  xTaskCreatePinnedToCore(USBWebCam::camera_init_task, "cam_init", 4096, this, 5, NULL, 0);
 }
 
 void USBWebCam::loop() {
