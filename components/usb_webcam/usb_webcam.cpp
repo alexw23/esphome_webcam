@@ -195,8 +195,8 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
       .user_ctx = NULL,
       .usb = {
           .dev_addr = 0,
-          .vid = 0,
-          .pid = 0,
+          .vid = UVC_HOST_ANY_VID,
+          .pid = UVC_HOST_ANY_PID,
           .uvc_stream_index = 0,
       },
       .vs_format = {
@@ -207,7 +207,7 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
       },
       .advanced = {
           .number_of_frame_buffers = 3,
-          .frame_size = frame_buffer_size,
+          .frame_size = 0,
           .frame_heap_caps = MALLOC_CAP_SPIRAM,
           .number_of_urbs = 3,
           .urb_size = 10 * 1024,
