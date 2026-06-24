@@ -122,7 +122,7 @@ esp_err_t usb_host_drivers_install() {
       return err;
   }
 
-  xTaskCreate([](void *arg) {
+  xTaskCreatePinnedToCore([](void *arg) {
       while (true) {
           uint32_t event_flags;
           usb_host_lib_handle_events(portMAX_DELAY, &event_flags);
@@ -130,12 +130,12 @@ esp_err_t usb_host_drivers_install() {
               usb_host_device_free_all();
           }
       }
-  }, "usb_events", 4096, NULL, 5, NULL);
+  }, "usb_events", 4096, NULL, 5, NULL, 0);  // core 0
 
   const uvc_host_driver_config_t uvc_driver_config = {
       .driver_task_stack_size = 8 * 1024,
       .driver_task_priority = 6,
-      .xCoreID = tskNO_AFFINITY,
+      .xCoreID = 0,
       .create_background_task = true,
   };
   err = uvc_host_install(&uvc_driver_config);
