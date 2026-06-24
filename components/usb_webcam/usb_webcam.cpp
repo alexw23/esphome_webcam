@@ -278,8 +278,9 @@ void USBWebCam::setup() {
 void USBWebCam::loop() {
   static uint32_t hb = 0;
   if (++hb % 100 == 0) {
-    ESP_LOGI(TAG, "HEARTBEAT: init_done=%d ready=%d hdl=%p attempts=%d",
-      this->camera_init_done_, this->camera_ready_, stream_hdl, this->open_attempts_);
+    ESP_LOGI(TAG, "HEARTBEAT: init_done=%d ready=%d hdl=%p attempts=%d start_ret=%s",
+    this->camera_init_done_, this->camera_ready_, stream_hdl, this->open_attempts_,
+    esp_err_to_name(this->last_start_ret_));
   }
   static bool logged = false;
   if (this->camera_init_done_ && !logged) {
