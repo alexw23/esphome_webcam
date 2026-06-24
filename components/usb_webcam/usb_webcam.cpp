@@ -260,20 +260,10 @@ void USBWebCam::loop() {
   if (!this->camera_ready_) {
     if (this->init_error_ != ESP_OK) {
       ESP_LOGE(TAG, "Setup Failed: %s", esp_err_to_name(this->init_error_));
-      // Fast blink = error (10 times)
-      for (int i = 0; i < 10; i++) {
-        gpio_set_level(GPIO_NUM_15, 1); vTaskDelay(pdMS_TO_TICKS(100));
-        gpio_set_level(GPIO_NUM_15, 0); vTaskDelay(pdMS_TO_TICKS(100));
-      }
       this->mark_failed();
     } else {
       ESP_LOGI(TAG, "Camera ready");
       this->camera_ready_ = true;
-      // Slow blink = success (3 times)
-      for (int i = 0; i < 3; i++) {
-        gpio_set_level(GPIO_NUM_15, 1); vTaskDelay(pdMS_TO_TICKS(500));
-        gpio_set_level(GPIO_NUM_15, 0); vTaskDelay(pdMS_TO_TICKS(500));
-      }
     }
   }
   if (this->has_requested_image_() || this->stream_requesters_) {
