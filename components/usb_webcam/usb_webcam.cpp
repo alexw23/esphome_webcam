@@ -217,13 +217,15 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
 
   esp_err_t ret = ESP_ERR_NOT_FOUND;
   for (int attempt = 1; attempt <= 5 && ret != ESP_OK; attempt++) {
-      ESP_LOGI(TAG, "uvc_host_stream_open attempt %d/5...", attempt);
+      global_usb_webcam->open_attempts_ = attempt;
       ret = uvc_host_stream_open(&stream_config, pdMS_TO_TICKS(10000), &stream_hdl);
+      global_usb_webcam->last_open_ret_ = ret;
       if (ret != ESP_OK) {
-          ESP_LOGW(TAG, "uvc_host_stream_open attempt %d failed: %s", attempt, esp_err_to_name(ret));
+        ESP_LOGW(TAG, "uvc_host_stream_open attempt %d failed: %s", attempt, esp_err_to_name(ret));
           vTaskDelay(pdMS_TO_TICKS(2000));
       }
   }
+
   if (ret != ESP_OK) {
       ESP_LOGE(TAG, "uvc_host_stream_open failed after 5 attempts: %s", esp_err_to_name(ret));
       return ret;
@@ -276,9 +278,9 @@ void USBWebCam::setup() {
 void USBWebCam::loop() {
   static bool logged = false;
   if (this->camera_init_done_ && !logged) {
-    logged = true;
-    ESP_LOGI(TAG, "POST-BOOT: init_error=%s ready=%d",
-        esp_err_to_name(this->init_error_), this->camera_ready_);
+      logged = true;
+      ESP_LOGI(TAG, "POST-BOOT: init_done=1 attempts=%d last_open_ret=%s stream_hdl=%p",
+          this->open_attempts_, esp_err_to_name(this->last_open_ret_), stream_hdl);
   }
   if (!this->camera_init_done_) return;
   if (!this->camera_ready_) {
