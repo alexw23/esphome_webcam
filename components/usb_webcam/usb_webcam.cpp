@@ -231,12 +231,9 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
       return ret;
   }
 
-  ret = uvc_host_stream_start(stream_hdl);
-  if (ret != ESP_OK) {
-      ESP_LOGE(TAG, "uvc_host_stream_start failed: %s", esp_err_to_name(ret));
-  }
-  ESP_LOGI(TAG, "STREAM STARTED OK, handle=%p", stream_hdl);
-  return ret;
+  global_usb_webcam->stream_opened_ = true;
+  ESP_LOGI(TAG, "Stream opened, deferring start to main loop");
+  return ESP_OK;
 }
 
 /* ---------------- public API (derivated) ---------------- */
@@ -289,6 +286,18 @@ void USBWebCam::loop() {
           this->open_attempts_, esp_err_to_name(this->last_open_ret_), stream_hdl);
   }
   if (!this->camera_init_done_) return;
+  // Deferred stream start — runs once, after API is up, so errors are visible over WiFi
+  if (this->stream_opened_ && !this->start_attempted_) {
+    this->start_attempted_ = true;
+    ESP_LOGI(TAG, "Attempting uvc_host_stream_start now...");
+    esp_err_t ret = uvc_host_stream_start(stream_hdl);
+    this->last_start_ret_ = ret;
+    if (ret != ESP_OK) {
+      ESP_LOGE(TAG, "stream_start FAILED: %d (%s)", ret, esp_err_to_name(ret));
+    } else {
+      ESP_LOGI(TAG, "stream_start OK — frames should flow now");
+    }
+  }
   if (!this->camera_ready_) {
     if (this->init_error_ != ESP_OK) {
       ESP_LOGE(TAG, "Setup Failed: %s", esp_err_to_name(this->init_error_));
