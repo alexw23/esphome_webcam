@@ -262,6 +262,12 @@ void USBWebCam::setup() {
 }
 
 void USBWebCam::loop() {
+  static bool logged = false;
+  if (this->camera_init_done_ && !logged) {
+    logged = true;
+    ESP_LOGI(TAG, "POST-BOOT: init_error=%s ready=%d",
+        esp_err_to_name(this->init_error_), this->camera_ready_);
+  }
   if (!this->camera_init_done_) return;
   if (!this->camera_ready_) {
     if (this->init_error_ != ESP_OK) {
