@@ -54,6 +54,14 @@ void esp_camera_fb_return(camera_fb_t *fb)
 
 static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
 {
+    static uint32_t cb_count = 0;
+    cb_count++;
+    if (cb_count % 10 == 0) {  // every 10th frame to avoid spam
+        ESP_LOGI(TAG, "FRAME_CB #%u: %dx%d len=%u fmt=%d bit0=%d",
+            cb_count, frame->vs_format.h_res, frame->vs_format.v_res,
+            frame->data_len, frame->vs_format.format,
+            (xEventGroupGetBits(s_evt_handle) & BIT0_FRAME_START) ? 1 : 0);
+    }
     if (!(xEventGroupGetBits(s_evt_handle) & BIT0_FRAME_START)) {
         return true;
     }
@@ -64,7 +72,7 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
              frame->vs_format.h_res, frame->vs_format.v_res, frame->data_len);
 
     if(frame->data_len < s_drop_frame_size) {
-      ESP_LOGV(TAG, "Dropping frame size %u < %u", frame->data_len, s_drop_frame_size);
+      ESP_LOGI(TAG, "DROP: frame %u < threshold %u", frame->data_len, s_drop_frame_size);
       return true;
     }
 
@@ -91,6 +99,9 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
 
 static void stream_callback(const uvc_host_stream_event_data_t *event, void *user_ctx)
 {
+
+    ESP_LOGI(TAG, "STREAM_EVENT type=%d", event->type);
+
     switch (event->type) {
     case UVC_HOST_TRANSFER_ERROR:
         ESP_LOGE(TAG, "USB error");
@@ -222,6 +233,7 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
   if (ret != ESP_OK) {
       ESP_LOGE(TAG, "uvc_host_stream_start failed: %s", esp_err_to_name(ret));
   }
+  ESP_LOGI(TAG, "STREAM STARTED OK, handle=%p", stream_hdl);
   return ret;
 }
 
