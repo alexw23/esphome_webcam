@@ -210,7 +210,7 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
           .frame_size = frame_buffer_size,
           .frame_heap_caps = MALLOC_CAP_SPIRAM,
           .number_of_urbs = 3,
-          .urb_size = 4 * 1024,
+          .urb_size = 10 * 1024,
           .user_frame_buffers = NULL,
       },
   };
