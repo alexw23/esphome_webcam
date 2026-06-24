@@ -197,8 +197,8 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
           .number_of_frame_buffers = 3,
           .frame_size = 0,
           .frame_heap_caps = MALLOC_CAP_SPIRAM,
-          .number_of_urbs = 3,
-          .urb_size = 10 * 1024,
+          .number_of_urbs = 5,
+          .urb_size = 20 * 1024,
           .user_frame_buffers = NULL,
       },
   };
@@ -363,7 +363,11 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
   }
   camera_fb_t *fb = esp_camera_fb_get();
   if (fb == nullptr) {
-    ESP_LOGE(TAG, "Got nullptr - returning from esp_camera_fb_get()");
+    // Change to Verbose or Debug so it doesn't flood your logs
+    ESP_LOGV(TAG, "No frame ready in queue yet."); 
+    
+    // Throttle the next check so we don't hammer the CPU
+    this->last_update_ = now; 
     return;
   }
   ESP_LOGI(TAG, "fb %p, len %u, wh %ux%u", fb->buf, fb->len, fb->width, fb->height);
