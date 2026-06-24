@@ -27,74 +27,61 @@ static const char *const TAG = "usb_webcam";
 
 namespace esphome::usb_webcam {
 
-static EventGroupHandle_t s_evt_handle;
+static QueueHandle_t s_frame_queue = NULL;
 static uint32_t s_drop_frame_size = 0;
 static camera_fb_t s_fb;
 static uvc_host_stream_hdl_t stream_hdl = NULL;
 
 camera_fb_t *esp_camera_fb_get()
 {
-    xEventGroupClearBits(s_evt_handle, BIT1_NEW_FRAME_START | BIT2_NEW_FRAME_END);
-    xEventGroupSetBits(s_evt_handle, BIT0_FRAME_START);
-    // Was portMAX_DELAY — now times out after 1s so the main loop can't hang
-    EventBits_t bits = xEventGroupWaitBits(s_evt_handle, BIT1_NEW_FRAME_START, true, true, pdMS_TO_TICKS(1000));
-    if (!(bits & BIT1_NEW_FRAME_START)) {
-        // Clear our request flag so we don't leave the camera task half-handshaked
-        xEventGroupClearBits(s_evt_handle, BIT0_FRAME_START);
-        return nullptr;
-    }
-    return &s_fb;
-}
+    uvc_host_frame_t *frame = NULL;
+    
+    // Check queue instantly (0 ticks). DO NOT BLOCK HERE!
+    if (xQueueReceive(s_frame_queue, &frame, 0) == pdPASS) {
+        
+        // Save the reference so we can return it to the USB driver later
+        s_current_uvc_frame = frame;
 
-void esp_camera_fb_return(camera_fb_t *fb)
-{
-    xEventGroupSetBits(s_evt_handle, BIT2_NEW_FRAME_END);
-    return;
-}
-
-static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
-{
-    static uint32_t cb_count = 0;
-    cb_count++;
-    if (cb_count <= 5 || cb_count % 10 == 0) {   // first 5, then every 10th
-        ESP_LOGW(TAG, "FRAME_CB #%u: %dx%d len=%u fmt=%d bit0=%d",
-            cb_count, frame->vs_format.h_res, frame->vs_format.v_res,
-            frame->data_len, frame->vs_format.format,
-            (xEventGroupGetBits(s_evt_handle) & BIT0_FRAME_START) ? 1 : 0);
-    }
-    if (!(xEventGroupGetBits(s_evt_handle) & BIT0_FRAME_START)) {
-        return true;
-    }
-
-    // Once we accept the frame, we don't want to accept another until requested
-    xEventGroupClearBits(s_evt_handle, BIT0_FRAME_START | BIT2_NEW_FRAME_END);
-    ESP_LOGV(TAG, "uvc frame w = %d, h = %d, length = %u",
-             frame->vs_format.h_res, frame->vs_format.v_res, frame->data_len);
-
-    if(frame->data_len < s_drop_frame_size) {
-      ESP_LOGI(TAG, "DROP: frame %u < threshold %u", frame->data_len, s_drop_frame_size);
-      return true;
-    }
-
-    switch (frame->vs_format.format) {
-    case UVC_VS_FORMAT_MJPEG:
+        // Populate the ESPHome camera structure
         s_fb.buf = (uint8_t*)frame->data;
         s_fb.len = frame->data_len;
         s_fb.width = frame->vs_format.h_res;
         s_fb.height = frame->vs_format.v_res;
         s_fb.format = PIXFORMAT_JPEG;
-        xEventGroupSetBits(s_evt_handle, BIT1_NEW_FRAME_START);
-        ESP_LOGV(TAG, "send frame length %u", frame->data_len);
-        // Was portMAX_DELAY — bound it so a dead consumer can't deadlock the UVC task
-        xEventGroupWaitBits(s_evt_handle, BIT2_NEW_FRAME_END, true, true, pdMS_TO_TICKS(1000));
-        ESP_LOGV(TAG, "send frame length %u done", frame->data_len);
-        break;
-    default:
-        ESP_LOGW(TAG, "Format not supported, dropping frame");
-        return true;  // was assert(0) — never crash the device over a stray frame
-        break;
+        
+        return &s_fb;
     }
-    return true;
+    
+    // No frame ready right now
+    return nullptr;
+}
+
+void esp_camera_fb_return(camera_fb_t *fb)
+{
+    // When ESPHome is done, release the memory back to the USB Host driver
+    if (s_current_uvc_frame != NULL && stream_hdl != NULL) {
+        uvc_host_frame_return(stream_hdl, s_current_uvc_frame);
+        s_current_uvc_frame = NULL;
+    }
+}
+
+static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
+{
+    // 1. Drop frames that are too small or wrong format
+    if (frame->data_len < s_drop_frame_size || frame->vs_format.format != UVC_VS_FORMAT_MJPEG) {
+        return true; // Return TRUE to tell driver: "I don't want this, recycle it"
+    }
+
+    // 2. Try to push to the queue
+    uvc_host_frame_t *frame_copy = (uvc_host_frame_t *)frame; 
+    if (xQueueSendToBack(s_frame_queue, &frame_copy, 0) == pdPASS) {
+        // Success!
+        return false; // Return FALSE to tell driver: "I am holding this, do not overwrite"
+    }
+
+    // 3. If queue is full, we drop the frame
+    ESP_LOGV(TAG, "Queue full, dropping frame");
+    return true; 
 }
 
 static void stream_callback(const uvc_host_stream_event_data_t *event, void *user_ctx)
@@ -122,9 +109,9 @@ esp_err_t usb_host_drivers_install() {
   bsp_usb_host_power_mode(BSP_USB_HOST_POWER_MODE_USB_DEV, true);
 #endif
   memset(&s_fb, 0, sizeof(camera_fb_t));
-  s_evt_handle = xEventGroupCreate();
-  if (s_evt_handle == NULL) {
-      ESP_LOGE(TAG, "Event group create failed");
+  s_frame_queue = xQueueCreate(2, sizeof(uvc_host_frame_t *));
+  if (s_frame_queue == NULL) {
+      ESP_LOGE(TAG, "Queue create failed");
       assert(0);
   }
 
@@ -332,7 +319,7 @@ void USBWebCam::start_stream(camera::CameraRequester requester) {
   if (!this->stream_requesters_)
     this->stream_start_callback_.call();
   this->stream_requesters_ |= val;
-  // ESP_LOGD(TAG, "start_stream! %d", this->stream_requesters_);
+  ESP_LOGD(TAG, "start_stream! %d", this->stream_requesters_);
 }
 
 void USBWebCam::stop_stream(camera::CameraRequester requester) {
@@ -341,7 +328,7 @@ void USBWebCam::stop_stream(camera::CameraRequester requester) {
   this->stream_requesters_ &= ~val;
   if (old_mask && !this->stream_requesters_)
     this->stream_stop_callback_.call();
-  // ESP_LOGD(TAG, "stop_stream! %d", this->stream_requesters_);
+  ESP_LOGD(TAG, "stop_stream! %d", this->stream_requesters_);
 }
 
 void USBWebCam::request_image(camera::CameraRequester requester) {
@@ -378,7 +365,7 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
     ESP_LOGE(TAG, "Got nullptr - returning from esp_camera_fb_get()");
     return;
   }
-  // ESP_LOGI(TAG, "fb %p, len %u, wh %ux%u", fb->buf, fb->len, fb->width, fb->height);
+  ESP_LOGI(TAG, "fb %p, len %u, wh %ux%u", fb->buf, fb->len, fb->width, fb->height);
 
   std::shared_ptr<USBWebCamImage> image = std::make_shared<USBWebCamImage>(fb, this->single_requesters_);
 
