@@ -56,8 +56,8 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
 {
     static uint32_t cb_count = 0;
     cb_count++;
-    if (cb_count % 10 == 0) {  // every 10th frame to avoid spam
-        ESP_LOGI(TAG, "FRAME_CB #%u: %dx%d len=%u fmt=%d bit0=%d",
+    if (cb_count <= 5 || cb_count % 10 == 0) {   // first 5, then every 10th
+        ESP_LOGW(TAG, "FRAME_CB #%u: %dx%d len=%u fmt=%d bit0=%d",
             cb_count, frame->vs_format.h_res, frame->vs_format.v_res,
             frame->data_len, frame->vs_format.format,
             (xEventGroupGetBits(s_evt_handle) & BIT0_FRAME_START) ? 1 : 0);
