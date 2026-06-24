@@ -195,7 +195,7 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
       .vs_format = {
           .h_res = frame_width,
           .v_res = frame_height,
-          .fps = 15, // let driver pick default fps from device descriptors
+          .fps = 10, // let driver pick default fps from device descriptors
           .format = UVC_VS_FORMAT_MJPEG,
       },
       .advanced = {
@@ -234,7 +234,7 @@ void USBWebCam::camera_init_task(void *pv) {
   USBWebCam *self = static_cast<USBWebCam *>(pv);
 
   // -- NEW: Sleep for 15 seconds so WiFi and Logger can connect --
-  vTaskDelay(pdMS_TO_TICKS(25000));
+  vTaskDelay(pdMS_TO_TICKS(10000));
 
   ESP_LOGI(TAG, "Starting USB stream open");
   self->init_error_ = esp_camera_init(self->frame_size, 1000 / self->max_update_interval_, self->frame_buffer_size_);
