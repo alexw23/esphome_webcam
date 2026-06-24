@@ -28,6 +28,7 @@ static const char *const TAG = "usb_webcam";
 namespace esphome::usb_webcam {
 
 static QueueHandle_t s_frame_queue = NULL;
+static uvc_host_frame_t *s_current_uvc_frame = NULL;
 static uint32_t s_drop_frame_size = 0;
 static camera_fb_t s_fb;
 static uvc_host_stream_hdl_t stream_hdl = NULL;
