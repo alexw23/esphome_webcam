@@ -314,9 +314,10 @@ void USBWebCam::start_stream(camera::CameraRequester requester) {
   uint8_t val = (1U << (uint32_t) requester);
   if (!this->stream_requesters_) {
     this->stream_start_callback_.call();
-    this->stream_requesters_ |= val;
-  }
-  ESP_LOGD(TAG, "start_stream! %d", this->stream_requesters_);
+    ESP_LOGD(TAG, "start_stream! %d", this->stream_requesters_); 
+  }  
+
+  this->stream_requesters_ |= val;
 }
 
 void USBWebCam::stop_stream(camera::CameraRequester requester) {
