@@ -199,8 +199,8 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
           
           // Increase URBs to 10 and size to 64KB
           // This gives you ~640KB of queue depth, preventing starvation
-          .number_of_urbs = 10,
-          .urb_size = 64 * 1024, 
+          .number_of_urbs = 8,
+          .urb_size = 32 * 1024, 
           
           .user_frame_buffers = NULL,
       },
