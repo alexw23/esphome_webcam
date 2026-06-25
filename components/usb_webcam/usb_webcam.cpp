@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // This file is derrived from esp32_camera component of ESPHome and from usb_camera_mic_spk example by Espressif
-#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #ifdef USE_ESP32
 
 #include "usb_webcam.h"
@@ -30,6 +29,7 @@ namespace esphome::usb_webcam {
 static uint32_t s_drop_frame_size = 0;
 static camera_fb_t s_fb;
 static uvc_host_stream_hdl_t stream_hdl = NULL;
+static int s_frame_cb_count = 0;
 
 void esp_camera_fb_return(camera_fb_t *fb)
 {
