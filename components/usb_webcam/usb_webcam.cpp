@@ -33,14 +33,13 @@ static int s_frame_cb_count = 0;
 
 void esp_camera_fb_return(camera_fb_t *fb)
 {
-    if (fb->buf != NULL) {
-        // Return to pool instead of freeing
+    if (fb && fb->buf != NULL) {
         xSemaphoreTake(s_buffer_mutex, portMAX_DELAY);
         s_free_buffers.push(fb->buf);
         xSemaphoreGive(s_buffer_mutex);
-        
         fb->buf = NULL;
     }
+    delete fb;
 }
 
 static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
@@ -441,6 +440,12 @@ USBWebCam *global_usb_webcam{nullptr};
 
 /* ---------------- CameraImage class implementations ---------------- */
 USBWebCamImage::USBWebCamImage(camera_fb_t *buffer, uint8_t requester) : camera::CameraImage(), buffer_(buffer), requesters_(requester) {}
+USBWebCamImage::~USBWebCamImage() {
+    if (buffer_) {
+        esp_camera_fb_return(buffer_);
+        buffer_ = nullptr;
+    }
+}
 camera_fb_t *USBWebCamImage::get_raw_buffer() { return this->buffer_; }
 uint8_t *USBWebCamImage::get_data_buffer() { return this->buffer_->buf; }
 size_t USBWebCamImage::get_data_length() { return this->buffer_->len; }
@@ -468,13 +473,8 @@ uint8_t *USBWebCamImageReader::peek_data_buffer() {
 }
 void USBWebCamImageReader::consume_data(size_t consumed) { this->offset_ += consumed; }
 void USBWebCamImageReader::return_image() {
-  if (!this->image_) {
-    return;
-  }
-  if (this->image_.use_count() == 2) {
-    esp_camera_fb_return(this->image_->get_raw_buffer());
-  }
-  this->image_.reset();
+    if (!this->image_) return;
+    this->image_.reset();  // destructor fires when last ref drops
 }
 
 }  // namespace esphome::usb_webcam

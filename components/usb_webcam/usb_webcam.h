@@ -73,6 +73,7 @@ class USBWebCam;
 class USBWebCamImage : public camera::CameraImage {
  public:
   USBWebCamImage(camera_fb_t *buffer, uint8_t requester);
+  ~USBWebCamImage();
   camera_fb_t *get_raw_buffer();
   uint8_t *get_data_buffer() override;
   size_t get_data_length() override;
