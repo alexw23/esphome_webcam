@@ -46,14 +46,6 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
         s_frame_cb_count, frame->vs_format.format, frame->data_len);
 
     if (frame->vs_format.format != UVC_VS_FORMAT_MJPEG) return true;
-    
-    // 1. OPTIMIZATION: Strict bounds check! 
-    // Do not copy if the frame is 0 or unreasonably massive (e.g., > 500KB for typical MJPEG)
-    if (frame->data == NULL || frame->data_len == 0 || frame->data_len > 500000) {
-        ESP_LOGW(TAG, "Invalid frame data or size (%" PRIu32 "). Dropping.", frame->data_len);
-        return true;
-    }
-
     if (frame->data_len < s_drop_frame_size) return true;
 
     // Drop incoming frame if previous one is still being consumed
@@ -61,20 +53,12 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
         return true;
     }
 
-    // 1. Allocate with 16-byte alignment and DMA support. 
-    // This is the "magic" that satisfies the P4 memory controller.
-    uint8_t *copy = (uint8_t *)heap_caps_aligned_alloc(16, frame->data_len, MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA);
-
+    uint8_t *copy = (uint8_t *)heap_caps_malloc(frame->data_len, MALLOC_CAP_SPIRAM);
     if (copy == NULL) {
-        ESP_LOGW(TAG, "Frame alloc failed, dropping");
+        ESP_LOGW(TAG, "Frame copy alloc failed, dropping");
         return true;
     }
-
-    // 2. Standard memcpy is perfect. 
-    // Now that 'copy' is 16-byte aligned, this will execute at max hardware speed.
     memcpy(copy, frame->data, frame->data_len);
-
-    s_fb.buf = copy;
 
     s_fb.buf = copy;
     s_fb.len = frame->data_len;
@@ -188,20 +172,11 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
           .format = UVC_VS_FORMAT_MJPEG,
       },
       .advanced = {
-          // Increase to 4 to give the CPU more breathing room to process 
-          // frames without blocking the incoming USB data
-          .number_of_frame_buffers = 4, 
-          
-          .frame_size = 800000,
-          
-          // Ensure this matches the aligned_alloc flags we discussed earlier
-          .frame_heap_caps = MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA,
-          
-          // Increase URBs to 10 and size to 64KB
-          // This gives you ~640KB of queue depth, preventing starvation
-          .number_of_urbs = 8,
-          .urb_size = 32 * 1024, 
-          
+          .number_of_frame_buffers = 2,
+          .frame_size = 600000,
+          .frame_heap_caps = MALLOC_CAP_SPIRAM,
+          .number_of_urbs = 3,
+          .urb_size = 3 * 1024,
           .user_frame_buffers = NULL,
       },
   };
@@ -337,10 +312,9 @@ void USBWebCam::start_stream(camera::CameraRequester requester) {
   uint8_t val = (1U << (uint32_t) requester);
   if (!this->stream_requesters_) {
     this->stream_start_callback_.call();
-    ESP_LOGD(TAG, "start_stream! %d", this->stream_requesters_);
+    this->stream_requesters_ |= val;
   }
-    
-  this->stream_requesters_ |= val;
+  ESP_LOGD(TAG, "start_stream! %d", this->stream_requesters_);
 }
 
 void USBWebCam::stop_stream(camera::CameraRequester requester) {
@@ -396,7 +370,7 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
     return;
   }
 
-  ESP_LOGV(TAG, "fb %p, len %u, wh %ux%u", fb->buf, fb->len, fb->width, fb->height);
+  ESP_LOGD(TAG, "fb %p, len %u, wh %ux%u", fb->buf, fb->len, fb->width, fb->height);
 
   std::shared_ptr<USBWebCamImage> image = std::make_shared<USBWebCamImage>(fb, this->single_requesters_);
 
