@@ -42,7 +42,7 @@ void esp_camera_fb_return(camera_fb_t *fb)
 static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
 {
     s_frame_cb_count++;
-    ESP_LOGI(TAG, "FRAME_CB #%d format=%d len=%" PRIu32,
+    ESP_LOGV(TAG, "FRAME_CB #%d format=%d len=%" PRIu32,
         s_frame_cb_count, frame->vs_format.format, frame->data_len);
 
     if (frame->vs_format.format != UVC_VS_FORMAT_MJPEG) return true;
@@ -72,8 +72,7 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
 
 static void stream_callback(const uvc_host_stream_event_data_t *event, void *user_ctx)
 {
-
-    ESP_LOGI(TAG, "STREAM_EVENT type=%d", event->type);
+    ESP_LOGV(TAG, "STREAM_EVENT type=%d", event->type);
 
     switch (event->type) {
     case UVC_HOST_TRANSFER_ERROR:
@@ -334,8 +333,6 @@ camera_fb_t *esp_camera_fb_get()
 }
 
 void USBWebCam::request_image(camera::CameraRequester requester) {
-  ESP_LOGV(TAG, "Request Image: requester=%d stream_requesters=%d", requester, this->stream_requesters_);
-
   if (!this->camera_ready_ || !this->start_attempted_ || stream_hdl == NULL) {
     return;
   }
