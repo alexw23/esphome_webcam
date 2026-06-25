@@ -126,7 +126,7 @@ esp_err_t usb_host_drivers_install() {
 
   const uvc_host_driver_config_t uvc_driver_config = {
       .driver_task_stack_size = 8 * 1024,
-      .driver_task_priority = 16,
+      .driver_task_priority = 3,
       .xCoreID = tskNO_AFFINITY,
       .create_background_task = true,
   };
