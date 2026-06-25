@@ -194,11 +194,20 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
           .format = UVC_VS_FORMAT_MJPEG,
       },
       .advanced = {
-          .number_of_frame_buffers = 2,
+          // Increase to 4 to give the CPU more breathing room to process 
+          // frames without blocking the incoming USB data
+          .number_of_frame_buffers = 4, 
+          
           .frame_size = 800000,
-          .frame_heap_caps = MALLOC_CAP_SPIRAM,
-          .number_of_urbs = 5,
-          .urb_size = 32 * 1024,
+          
+          // Ensure this matches the aligned_alloc flags we discussed earlier
+          .frame_heap_caps = MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA,
+          
+          // Increase URBs to 10 and size to 64KB
+          // This gives you ~640KB of queue depth, preventing starvation
+          .number_of_urbs = 10,
+          .urb_size = 64 * 1024, 
+          
           .user_frame_buffers = NULL,
       },
   };
