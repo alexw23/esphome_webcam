@@ -46,24 +46,41 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
         s_frame_cb_count, frame->vs_format.format, frame->data_len);
 
     if (frame->vs_format.format != UVC_VS_FORMAT_MJPEG) return true;
-    if (frame->data_len < s_drop_frame_size) return true;
-
-    if (frame->data == NULL || frame->data_len == 0) {
-        ESP_LOGW(TAG, "Empty or invalid frame data pointer received. Dropping frame.");
+    
+    // 1. OPTIMIZATION: Strict bounds check! 
+    // Do not copy if the frame is 0 or unreasonably massive (e.g., > 500KB for typical MJPEG)
+    if (frame->data == NULL || frame->data_len == 0 || frame->data_len > 500000) {
+        ESP_LOGW(TAG, "Invalid frame data or size (%" PRIu32 "). Dropping.", frame->data_len);
         return true;
     }
+
+    if (frame->data_len < s_drop_frame_size) return true;
 
     // Drop incoming frame if previous one is still being consumed
     if (s_fb.buf != NULL) {
         return true;
     }
 
-    uint8_t *copy = (uint8_t *)heap_caps_malloc(frame->data_len, MALLOC_CAP_SPIRAM);
+    // 2. OPTIMIZATION: Make sure you aren't fighting the memory allocator.
+    uint8_t *copy = (uint8_t *)heap_caps_aligned_alloc(16, frame->data_len, MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA);
+
     if (copy == NULL) {
-        ESP_LOGW(TAG, "Frame copy alloc failed, dropping");
-        return true;
+        ESP_LOGW(TAG, "Frame allocation failed. Check if frame_buffer_size is too small.");
+        return true; // Gracefully drop this frame to prevent a crash
     }
-    memcpy(copy, frame->data, frame->data_len);
+
+    #ifdef CONFIG_IDF_TARGET_ESP32P4
+        // P4 specific optimization: Use DMA-accelerated memory copy
+        // Note: Ensure your destination buffer is DMA-capable (MALLOC_CAP_DMA)
+        esp_err_t err = esp_rom_aligned_memcpy(copy, frame->data, frame->data_len);
+        if (err != ESP_OK) {
+            // Fallback to standard memcpy if DMA fails
+            memcpy(copy, frame->data, frame->data_len);
+        }
+    #else
+        // Standard memcpy for S3 or other targets
+        memcpy(copy, frame->data, frame->data_len);
+    #endif
 
     s_fb.buf = copy;
     s_fb.len = frame->data_len;
@@ -315,9 +332,11 @@ float USBWebCam::get_setup_priority() const { return setup_priority::BUS; }
 /* ---------------- public API (specific) ---------------- */
 void USBWebCam::start_stream(camera::CameraRequester requester) {
   uint8_t val = (1U << (uint32_t) requester);
-  if (!this->stream_requesters_)
+  if (!this->stream_requesters_) {
     this->stream_start_callback_.call();
     ESP_LOGD(TAG, "start_stream! %d", this->stream_requesters_);
+  }
+    
   this->stream_requesters_ |= val;
 }
 
@@ -325,9 +344,10 @@ void USBWebCam::stop_stream(camera::CameraRequester requester) {
   uint8_t old_mask = this->stream_requesters_;
   uint8_t val = (1U << (uint32_t) requester);
   this->stream_requesters_ &= ~val;
-  if (old_mask && !this->stream_requesters_)
+  if (old_mask && !this->stream_requesters_) {
     this->stream_stop_callback_.call();
     ESP_LOGD(TAG, "stop_stream! %d", this->stream_requesters_);
+  }
 }
 
 camera_fb_t *esp_camera_fb_get()
