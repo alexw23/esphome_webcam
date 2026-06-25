@@ -34,42 +34,36 @@ static int s_frame_cb_count = 0;
 void esp_camera_fb_return(camera_fb_t *fb)
 {
     if (fb->buf != NULL) {
-        heap_caps_free(fb->buf);
+        // Return to pool instead of freeing
+        xSemaphoreTake(s_buffer_mutex, portMAX_DELAY);
+        s_free_buffers.push(fb->buf);
+        xSemaphoreGive(s_buffer_mutex);
+        
         fb->buf = NULL;
     }
+    delete fb; // Clean up the struct wrapper
 }
 
 static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
 {
-    s_frame_cb_count++;
-    ESP_LOGV(TAG, "FRAME_CB #%d format=%d len=%" PRIu32,
-        s_frame_cb_count, frame->vs_format.format, frame->data_len);
-
     if (frame->vs_format.format != UVC_VS_FORMAT_MJPEG) return true;
-    if (frame->data_len < s_drop_frame_size) return true;
 
-    // Drop incoming frame if previous one is still being consumed
-    if (s_fb.buf != NULL) {
-        return true;
+    xSemaphoreTake(s_buffer_mutex, portMAX_DELAY);
+    if (!s_free_buffers.empty()) {
+        uint8_t *buf = s_free_buffers.front();
+        s_free_buffers.pop();
+        memcpy(buf, frame->data, frame->data_len);
+
+        camera_fb_t *fb = new camera_fb_t();
+        fb->buf = buf;
+        fb->len = frame->data_len;
+        fb->width = frame->vs_format.h_res;
+        fb->height = frame->vs_format.v_res;
+        fb->format = PIXFORMAT_JPEG;
+        
+        s_ready_buffers.push(fb);
     }
-
-    // Try this temporarily to isolate if DMA is the cause
-    uint8_t *copy = (uint8_t *)heap_caps_aligned_alloc(16, frame->data_len, MALLOC_CAP_SPIRAM);
-    if (!copy) return true;
-    
-    memcpy(copy, frame->data, frame->data_len);
-
-    // Atomic-like update (you may need a mutex here if crashes continue)
-    if (s_fb.buf != NULL) {
-        heap_caps_free(s_fb.buf); // Clean up the previous frame
-    }
-    
-    s_fb.buf = copy; // Update the pointer only after the full copy is done
-    s_fb.len = frame->data_len;
-    s_fb.width = frame->vs_format.h_res;
-    s_fb.height = frame->vs_format.v_res;
-    s_fb.format = PIXFORMAT_JPEG;
-
+    xSemaphoreGive(s_buffer_mutex);
     return true;
 }
 
@@ -244,6 +238,15 @@ void USBWebCam::setup() {
 
   // Defer slow stream open (device enumeration) to background task
   xTaskCreatePinnedToCore(USBWebCam::camera_init_task, "cam_init", 4096, this, 5, NULL, 0);
+
+  for (int i = 0; i < NUM_BUFFERS; i++) {
+    uint8_t *buf = (uint8_t *)heap_caps_aligned_alloc(16, frame_buffer_size_, MALLOC_CAP_SPIRAM);
+    if (buf) {
+      s_free_buffers.push(buf);
+    }
+  }
+  
+  s_buffer_mutex = xSemaphoreCreateMutex();
 }
 
 void USBWebCam::loop() {
@@ -359,15 +362,23 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
 
   if (stream_hdl == NULL) return;
 
-  camera_fb_t *fb = esp_camera_fb_get();
+  // --- REPLACE THE OLD esp_camera_fb_get() LOGIC WITH THIS ---
+  camera_fb_t *fb = nullptr;
+
+  xSemaphoreTake(s_buffer_mutex, portMAX_DELAY);
+  if (!s_ready_buffers.empty()) {
+    fb = s_ready_buffers.front();
+    s_ready_buffers.pop();
+  }
+  xSemaphoreGive(s_buffer_mutex);
+
   if (fb == nullptr) {
     ESP_LOGV(TAG, "No frame ready yet");
-    this->last_update_ = now;
+    // Don't update last_update_ here if we just missed a frame
     return;
   }
 
-  ESP_LOGD(TAG, "fb %p, len %u, wh %ux%u", fb->buf, fb->len, fb->width, fb->height);
-
+  // Process the frame
   std::shared_ptr<USBWebCamImage> image = std::make_shared<USBWebCamImage>(fb, this->single_requesters_);
 
   for (auto *listener : this->listeners_) {
@@ -377,6 +388,15 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
   this->current_image_ = image;
   this->single_requesters_ = 0;
   this->last_update_ = now;
+
+  // IMPORTANT: Return buffer to the free pool AFTER the listeners are done
+  // If your listeners are fast, you can do it here. 
+  // If they are async, you need to handle the deletion in a custom deleter 
+  // for the shared_ptr to avoid race conditions!
+  xSemaphoreTake(s_buffer_mutex, portMAX_DELAY);
+  s_free_buffers.push(fb->buf);
+  delete fb;
+  xSemaphoreGive(s_buffer_mutex);
 }
 
 void USBWebCam::update_camera_parameters() {
