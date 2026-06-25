@@ -55,20 +55,16 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
 
     // Try this temporarily to isolate if DMA is the cause
     uint8_t *copy = (uint8_t *)heap_caps_aligned_alloc(16, frame->data_len, MALLOC_CAP_SPIRAM);
-
-    if (copy == NULL) {
-        ESP_LOGW(TAG, "Frame copy alloc failed, dropping");
-        return true;
-    }
-    
-    if (frame->data == NULL || frame->data_len == 0) {
-        ESP_LOGW(TAG, "Invalid frame data pointer/length, skipping");
-        return true;
-    }
+    if (!copy) return true;
     
     memcpy(copy, frame->data, frame->data_len);
 
-    s_fb.buf = copy;
+    // Atomic-like update (you may need a mutex here if crashes continue)
+    if (s_fb.buf != NULL) {
+        heap_caps_free(s_fb.buf); // Clean up the previous frame
+    }
+    
+    s_fb.buf = copy; // Update the pointer only after the full copy is done
     s_fb.len = frame->data_len;
     s_fb.width = frame->vs_format.h_res;
     s_fb.height = frame->vs_format.v_res;
