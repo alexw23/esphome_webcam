@@ -27,35 +27,9 @@ static const char *const TAG = "usb_webcam";
 
 namespace esphome::usb_webcam {
 
-static QueueHandle_t s_frame_queue = NULL;
-static uvc_host_frame_t *s_current_uvc_frame = NULL;
 static uint32_t s_drop_frame_size = 0;
 static camera_fb_t s_fb;
 static uvc_host_stream_hdl_t stream_hdl = NULL;
-
-camera_fb_t *esp_camera_fb_get()
-{
-    uvc_host_frame_t *frame = NULL;
-    
-    // Check queue instantly (0 ticks). DO NOT BLOCK HERE!
-    if (xQueueReceive(s_frame_queue, &frame, 0) == pdPASS) {
-        
-        // Save the reference so we can return it to the USB driver later
-        s_current_uvc_frame = frame;
-
-        // Populate the ESPHome camera structure
-        s_fb.buf = (uint8_t*)frame->data;
-        s_fb.len = frame->data_len;
-        s_fb.width = frame->vs_format.h_res;
-        s_fb.height = frame->vs_format.v_res;
-        s_fb.format = PIXFORMAT_JPEG;
-        
-        return &s_fb;
-    }
-    
-    // No frame ready right now
-    return nullptr;
-}
 
 void esp_camera_fb_return(camera_fb_t *fb)
 {
@@ -116,11 +90,6 @@ esp_err_t usb_host_drivers_install() {
   bsp_usb_host_power_mode(BSP_USB_HOST_POWER_MODE_USB_DEV, true);
 #endif
   memset(&s_fb, 0, sizeof(camera_fb_t));
-  s_frame_queue = xQueueCreate(2, sizeof(uvc_host_frame_t *));
-  if (s_frame_queue == NULL) {
-      ESP_LOGE(TAG, "Queue create failed");
-      assert(0);
-  }
 
   ESP_LOGI(TAG, "Installing USB Host");
   const usb_host_config_t host_config = {
