@@ -16,7 +16,7 @@
 
 #include <freertos/event_groups.h>
 #include <freertos/task.h>
-
+#include <freertos/semphr.h>
 
 static const char *const TAG = "usb_webcam";
 
@@ -29,6 +29,7 @@ namespace esphome::usb_webcam {
 static uint32_t s_drop_frame_size = 0;
 static camera_fb_t s_fb;
 static uvc_host_stream_hdl_t stream_hdl = NULL;
+static SemaphoreHandle_t fb_mutex = nullptr;
 static int s_frame_cb_count = 0;
 
 void esp_camera_fb_return(camera_fb_t *fb)
@@ -49,7 +50,16 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
     if (frame->data_len < s_drop_frame_size) return true;
 
     // Drop incoming frame if previous one is still being consumed
+    if (fb_mutex == nullptr) {
+        return true;
+    }
+
+    if (xSemaphoreTake(fb_mutex, pdMS_TO_TICKS(10)) != pdTRUE) {
+        return true;
+    }
+
     if (s_fb.buf != NULL) {
+        xSemaphoreGive(fb_mutex);
         return true;
     }
 
@@ -68,7 +78,7 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
     s_fb.height = frame->vs_format.v_res;
     s_fb.format = PIXFORMAT_JPEG;
 
-    return true;
+    xSemaphoreGive(fb_mutex);
 }
 
 static void stream_callback(const uvc_host_stream_event_data_t *event, void *user_ctx)
@@ -221,6 +231,16 @@ void USBWebCam::setup() {
   global_usb_webcam = this;
   this->last_update_ = esp_timer_get_time();
 
+  fb_mutex = xSemaphoreCreateMutex();
+
+  if (fb_mutex == nullptr) {
+    ESP_LOGE(TAG, "Failed to create framebuffer mutex");
+    this->init_error_ = ESP_ERR_NO_MEM;
+    this->camera_init_done_ = true;
+    return;
+  }
+
+
   // Configure status LED
   gpio_reset_pin(GPIO_NUM_15);
   gpio_set_direction(GPIO_NUM_15, GPIO_MODE_OUTPUT);
@@ -323,8 +343,23 @@ void USBWebCam::stop_stream(camera::CameraRequester requester) {
 
 camera_fb_t *esp_camera_fb_get()
 {
-    if (s_fb.buf == NULL) return nullptr;
-    return &s_fb;
+    if (fb_mutex == nullptr) {
+        return nullptr;
+    }
+
+    if (xSemaphoreTake(fb_mutex, pdMS_TO_TICKS(10)) != pdTRUE) {
+        return nullptr;
+    }
+
+    camera_fb_t *ret = nullptr;
+
+    if (s_fb.buf != NULL) {
+        ret = &s_fb;
+    }
+
+    xSemaphoreGive(fb_mutex);
+
+    return ret;
 }
 
 void USBWebCam::request_image(camera::CameraRequester requester) {
