@@ -59,10 +59,9 @@ camera_fb_t *esp_camera_fb_get()
 
 void esp_camera_fb_return(camera_fb_t *fb)
 {
-    // When ESPHome is done, release the memory back to the USB Host driver
-    if (s_current_uvc_frame != NULL && stream_hdl != NULL) {
-        uvc_host_frame_return(stream_hdl, s_current_uvc_frame);
-        s_current_uvc_frame = NULL;
+    if (fb->buf != NULL) {
+        heap_caps_free(fb->buf);
+        fb->buf = NULL;
     }
 }
 
@@ -71,20 +70,25 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
     if (frame->vs_format.format != UVC_VS_FORMAT_MJPEG) return true;
     if (frame->data_len < s_drop_frame_size) return true;
 
-    // Copy frame data before returning buffer to driver
+    // Copy data before returning buffer to driver
     uint8_t *copy = (uint8_t *)heap_caps_malloc(frame->data_len, MALLOC_CAP_SPIRAM);
-    if (copy == NULL) return true;
+    if (copy == NULL) {
+        ESP_LOGW(TAG, "Frame copy alloc failed, dropping");
+        return true;
+    }
     memcpy(copy, frame->data, frame->data_len);
-    
-    // Store metadata
+
+    // Fill static fb with copied data
     s_fb.buf = copy;
     s_fb.len = frame->data_len;
     s_fb.width = frame->vs_format.h_res;
     s_fb.height = frame->vs_format.v_res;
     s_fb.format = PIXFORMAT_JPEG;
 
-    ESP_LOGI(TAG, "Frame copied: %" PRIu32 " bytes", frame->data_len);
-    return true; // always return buffer to driver
+    ESP_LOGI(TAG, "Frame copied: %" PRIu32 " bytes %dx%d",
+        frame->data_len, frame->vs_format.h_res, frame->vs_format.v_res);
+
+    return true; // always return buffer to driver immediately
 }
 
 static void stream_callback(const uvc_host_stream_event_data_t *event, void *user_ctx)
@@ -374,11 +378,12 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
     return;  // camera disconnected, nothing to request
   }
   // Always consume frames to prevent buffer starvation
-  camera_fb_t *fb = esp_camera_fb_get();
-  if (fb != nullptr) {
-      ESP_LOGI(TAG, "Frame drained: %zu bytes", fb->len);
-      heap_caps_free(fb->buf);
+  camera_fb_t *esp_camera_fb_get()
+  {
+      if (s_fb.buf == NULL) return nullptr;
+      return &s_fb;
   }
+
   ESP_LOGI(TAG, "fb %p, len %u, wh %ux%u", fb->buf, fb->len, fb->width, fb->height);
 
   std::shared_ptr<USBWebCamImage> image = std::make_shared<USBWebCamImage>(fb, this->single_requesters_);
