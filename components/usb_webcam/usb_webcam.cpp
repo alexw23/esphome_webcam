@@ -166,14 +166,14 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
           .uvc_stream_index = 0,
       },
       .vs_format = {
-          .h_res = 640,
-          .v_res = 480,
-          .fps = 30, // let driver pick default fps from device descriptors
+          .h_res = frame_width,
+          .v_res = frame_height,
+          .fps = 0, // let driver pick default fps from device descriptors
           .format = UVC_VS_FORMAT_MJPEG,
       },
       .advanced = {
           .number_of_frame_buffers = 2,
-          .frame_size = 614400,
+          .frame_size = 600000,
           .frame_heap_caps = MALLOC_CAP_SPIRAM,
           .number_of_urbs = 3,
           .urb_size = 16 * 1024,
@@ -368,7 +368,7 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
     return;
   }
 
-  ESP_LOGI(TAG, "fb %p, len %u, wh %ux%u", fb->buf, fb->len, fb->width, fb->height);
+  ESP_LOGV(TAG, "fb %p, len %u, wh %ux%u", fb->buf, fb->len, fb->width, fb->height);
 
   std::shared_ptr<USBWebCamImage> image = std::make_shared<USBWebCamImage>(fb, this->single_requesters_);
 
