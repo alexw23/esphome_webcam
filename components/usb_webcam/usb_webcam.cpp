@@ -251,7 +251,7 @@ void USBWebCam::setup() {
 void USBWebCam::loop() {
   static uint32_t hb = 0;
   if (++hb % 100 == 0) {
-    ESP_LOGI(TAG, "HEARTBEAT: init_done=%d ready=%d hdl=%p attempts=%d start_ret=%d (%s)",
+    ESP_LOGV(TAG, "HEARTBEAT: init_done=%d ready=%d hdl=%p attempts=%d start_ret=%d (%s)",
     this->camera_init_done_, this->camera_ready_, stream_hdl, this->open_attempts_,
     this->last_start_ret_, esp_err_to_name(this->last_start_ret_));
   }
@@ -267,11 +267,15 @@ void USBWebCam::loop() {
     this->start_attempted_ = true;
     ESP_LOGI(TAG, "Attempting uvc_host_stream_start now...");
     esp_err_t ret = uvc_host_stream_start(stream_hdl);
+
     this->last_start_ret_ = ret;
     if (ret != ESP_OK) {
       ESP_LOGE(TAG, "stream_start FAILED: %d (%s)", ret, esp_err_to_name(ret));
     } else {
       ESP_LOGI(TAG, "stream_start OK — frames should flow now");
+
+      ESP_LOGI(TAG, "Stream started — waiting for frames from callback");
+      esp_log_level_set("*", ESP_LOG_VERBOSE);  // nuclear option — everything verbose
     }
   }
   if (!this->camera_ready_) {
