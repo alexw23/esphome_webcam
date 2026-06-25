@@ -334,6 +334,8 @@ camera_fb_t *esp_camera_fb_get()
 }
 
 void USBWebCam::request_image(camera::CameraRequester requester) {
+  ESP_LOGV(TAG, "Request Image: requester=%d stream_requesters=%d", requester, this->stream_requesters_);
+
   if (!this->camera_ready_ || !this->start_attempted_ || stream_hdl == NULL) {
     return;
   }
