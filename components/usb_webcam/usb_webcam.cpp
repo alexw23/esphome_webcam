@@ -263,7 +263,7 @@ void USBWebCam::setup() {
 void USBWebCam::loop() {
   static uint32_t hb = 0;
   if (++hb % 100 == 0) {
-    ESP_LOGV(TAG, "HEARTBEAT: init_done=%d ready=%d hdl=%p attempts=%d start_ret=%d s_frame_cb_count=%d (%s)",
+    ESP_LOGD(TAG, "HEARTBEAT: init_done=%d ready=%d hdl=%p attempts=%d start_ret=%d s_frame_cb_count=%d (%s)",
     this->camera_init_done_, this->camera_ready_, stream_hdl, this->open_attempts_,
     this->last_start_ret_, s_frame_cb_count, esp_err_to_name(this->last_start_ret_));
   }
@@ -373,7 +373,6 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
 
   if (stream_hdl == NULL) return;
 
-  // --- REPLACE THE OLD esp_camera_fb_get() LOGIC WITH THIS ---
   camera_fb_t *fb = nullptr;
 
   xSemaphoreTake(s_buffer_mutex, portMAX_DELAY);
