@@ -42,19 +42,18 @@ void esp_camera_fb_return(camera_fb_t *fb)
 static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
 {
     s_frame_cb_count++;
-    ESP_LOGI(TAG, "FRAME_CB #%d format=%d len=%" PRIu32, 
+    ESP_LOGI(TAG, "FRAME_CB #%d format=%d len=%" PRIu32,
         s_frame_cb_count, frame->vs_format.format, frame->data_len);
-    
-    if (frame->vs_format.format != UVC_VS_FORMAT_MJPEG) {
-        ESP_LOGW(TAG, "Wrong format: %d (expected MJPEG=%d)", 
-            frame->vs_format.format, UVC_VS_FORMAT_MJPEG);
-        return true;
-    }
 
     if (frame->vs_format.format != UVC_VS_FORMAT_MJPEG) return true;
     if (frame->data_len < s_drop_frame_size) return true;
 
-    // Copy data before returning buffer to driver
+    // Free previous frame if not yet consumed
+    if (s_fb.buf != NULL) {
+        heap_caps_free(s_fb.buf);
+        s_fb.buf = NULL;
+    }
+
     uint8_t *copy = (uint8_t *)heap_caps_malloc(frame->data_len, MALLOC_CAP_SPIRAM);
     if (copy == NULL) {
         ESP_LOGW(TAG, "Frame copy alloc failed, dropping");
@@ -62,17 +61,13 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
     }
     memcpy(copy, frame->data, frame->data_len);
 
-    // Fill static fb with copied data
     s_fb.buf = copy;
     s_fb.len = frame->data_len;
     s_fb.width = frame->vs_format.h_res;
     s_fb.height = frame->vs_format.v_res;
     s_fb.format = PIXFORMAT_JPEG;
 
-    ESP_LOGI(TAG, "Frame copied: %" PRIu32 " bytes %dx%d",
-        frame->data_len, frame->vs_format.h_res, frame->vs_format.v_res);
-
-    return true; // always return buffer to driver immediately
+    return true;
 }
 
 static void stream_callback(const uvc_host_stream_event_data_t *event, void *user_ctx)
