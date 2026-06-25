@@ -48,6 +48,11 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
     if (frame->vs_format.format != UVC_VS_FORMAT_MJPEG) return true;
     if (frame->data_len < s_drop_frame_size) return true;
 
+    if (frame->data == NULL || frame->data_len == 0) {
+        ESP_LOGW(TAG, "Empty or invalid frame data pointer received. Dropping frame.");
+        return true;
+    }
+
     // Drop incoming frame if previous one is still being consumed
     if (s_fb.buf != NULL) {
         return true;
@@ -176,7 +181,7 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
           .frame_size = 800000,
           .frame_heap_caps = MALLOC_CAP_SPIRAM,
           .number_of_urbs = 5,
-          .urb_size = 3 * 1024,
+          .urb_size = 32 * 1024,
           .user_frame_buffers = NULL,
       },
   };
