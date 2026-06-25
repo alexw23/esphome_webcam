@@ -175,7 +175,7 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
       },
       .advanced = {
           .number_of_frame_buffers = 3,
-          .frame_size = 600000,
+          .frame_size = 614400,
           .frame_heap_caps = MALLOC_CAP_SPIRAM,
           .number_of_urbs = 4,
           .urb_size = 10 * 1024,
