@@ -275,7 +275,13 @@ void USBWebCam::loop() {
       ESP_LOGI(TAG, "stream_start OK — frames should flow now");
 
       ESP_LOGI(TAG, "Stream started — waiting for frames from callback");
-      esp_log_level_set("*", ESP_LOG_VERBOSE);  // nuclear option — everything verbose
+      ESP_LOGI(TAG, "Checking compile-time log level...");
+      // Force IDF to log everything including USB host internals
+      esp_log_level_set("UVC", ESP_LOG_VERBOSE);
+      esp_log_level_set("uvc", ESP_LOG_VERBOSE);  
+      esp_log_level_set("USB_HOST", ESP_LOG_VERBOSE);
+      esp_log_level_set("USBH", ESP_LOG_VERBOSE);
+      esp_log_level_set("HCD", ESP_LOG_VERBOSE);
     }
   }
   if (!this->camera_ready_) {
