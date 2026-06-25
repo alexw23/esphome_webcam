@@ -388,15 +388,6 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
   this->current_image_ = image;
   this->single_requesters_ = 0;
   this->last_update_ = now;
-
-  // IMPORTANT: Return buffer to the free pool AFTER the listeners are done
-  // If your listeners are fast, you can do it here. 
-  // If they are async, you need to handle the deletion in a custom deleter 
-  // for the shared_ptr to avoid race conditions!
-  xSemaphoreTake(s_buffer_mutex, portMAX_DELAY);
-  s_free_buffers.push(fb->buf);
-  delete fb;
-  xSemaphoreGive(s_buffer_mutex);
 }
 
 void USBWebCam::update_camera_parameters() {
