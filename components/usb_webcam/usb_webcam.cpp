@@ -48,10 +48,9 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
     if (frame->vs_format.format != UVC_VS_FORMAT_MJPEG) return true;
     if (frame->data_len < s_drop_frame_size) return true;
 
-    // Free previous frame if not yet consumed
+    // Drop incoming frame if previous one is still being consumed
     if (s_fb.buf != NULL) {
-        heap_caps_free(s_fb.buf);
-        s_fb.buf = NULL;
+        return true;
     }
 
     uint8_t *copy = (uint8_t *)heap_caps_malloc(frame->data_len, MALLOC_CAP_SPIRAM);
