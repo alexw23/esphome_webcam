@@ -45,13 +45,13 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
     ESP_LOGI(TAG, "FRAME_CB #%d format=%d len=%" PRIu32, 
         s_frame_cb_count, frame->vs_format.format, frame->data_len);
     
-    if (frame->vs_format.format != UVC_VS_FORMAT_MJPEG) {
-        ESP_LOGW(TAG, "Wrong format: %d (expected MJPEG=%d)", 
-            frame->vs_format.format, UVC_VS_FORMAT_MJPEG);
-        return true;
-    }
+    // if (frame->vs_format.format != UVC_VS_FORMAT_MJPEG) {
+    //     ESP_LOGW(TAG, "Wrong format: %d (expected MJPEG=%d)", 
+    //         frame->vs_format.format, UVC_VS_FORMAT_MJPEG);
+    //     return true;
+    // }
 
-    if (frame->vs_format.format != UVC_VS_FORMAT_MJPEG) return true;
+    // if (frame->vs_format.format != UVC_VS_FORMAT_MJPEG) return true;
     if (frame->data_len < s_drop_frame_size) return true;
 
     // Copy data before returning buffer to driver
@@ -176,7 +176,7 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
           .h_res = 640,
           .v_res = 480,
           .fps = 30, // let driver pick default fps from device descriptors
-          .format = UVC_VS_FORMAT_MJPEG,
+          .format = UVC_VS_FORMAT_UNCOMPRESSED,
       },
       .advanced = {
           .number_of_frame_buffers = 2,
