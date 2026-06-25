@@ -317,8 +317,8 @@ void USBWebCam::start_stream(camera::CameraRequester requester) {
   uint8_t val = (1U << (uint32_t) requester);
   if (!this->stream_requesters_)
     this->stream_start_callback_.call();
+    ESP_LOGD(TAG, "start_stream! %d", this->stream_requesters_);
   this->stream_requesters_ |= val;
-  ESP_LOGD(TAG, "start_stream! %d", this->stream_requesters_);
 }
 
 void USBWebCam::stop_stream(camera::CameraRequester requester) {
@@ -327,7 +327,7 @@ void USBWebCam::stop_stream(camera::CameraRequester requester) {
   this->stream_requesters_ &= ~val;
   if (old_mask && !this->stream_requesters_)
     this->stream_stop_callback_.call();
-  ESP_LOGD(TAG, "stop_stream! %d", this->stream_requesters_);
+    ESP_LOGD(TAG, "stop_stream! %d", this->stream_requesters_);
 }
 
 camera_fb_t *esp_camera_fb_get()
@@ -373,7 +373,7 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
     return;
   }
 
-  ESP_LOGD(TAG, "fb %p, len %u, wh %ux%u", fb->buf, fb->len, fb->width, fb->height);
+  ESP_LOGV(TAG, "fb %p, len %u, wh %ux%u", fb->buf, fb->len, fb->width, fb->height);
 
   std::shared_ptr<USBWebCamImage> image = std::make_shared<USBWebCamImage>(fb, this->single_requesters_);
 
