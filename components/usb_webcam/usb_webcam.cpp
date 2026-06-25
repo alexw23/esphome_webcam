@@ -178,11 +178,11 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
           .format = UVC_VS_FORMAT_MJPEG,
       },
       .advanced = {
-          .number_of_frame_buffers = 3,
-          .frame_size = 0,
+          .number_of_frame_buffers = 2,
+          .frame_size = 614400,
           .frame_heap_caps = MALLOC_CAP_SPIRAM,
-          .number_of_urbs = 5,
-          .urb_size = 20 * 1024,
+          .number_of_urbs = 3,
+          .urb_size = 16 * 1024,
           .user_frame_buffers = NULL,
       },
   };
