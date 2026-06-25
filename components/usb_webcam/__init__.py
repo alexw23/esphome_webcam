@@ -148,6 +148,7 @@ async def to_code(config):
             repo="https://github.com/alexw23/esp-usb.git",
             path="host/class/uvc/usb_host_uvc"
     )
+    
     # add_idf_component(
     #     name="espressif/usb_host_uvc",
     #     ref="2.5.1"
