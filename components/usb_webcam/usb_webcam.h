@@ -12,6 +12,9 @@
 #include "esphome/core/helpers.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
+#include <vector>
+#include <queue>
+
 
 namespace esphome::usb_webcam {
 using namespace esphome::camera;
@@ -58,6 +61,12 @@ typedef struct {
     pixformat_t format;         // Format of the pixel data
     struct timeval timestamp;   // Timestamp since boot of the first DMA buffer of the frame
 } camera_fb_t;
+
+// Pre-allocate space for 3 frames to allow for queuing
+#define NUM_BUFFERS 3
+static std::queue<uint8_t *> s_free_buffers;
+static std::queue<camera_fb_t *> s_ready_buffers;
+static SemaphoreHandle_t s_buffer_mutex = xSemaphoreCreateMutex();
 
 class USBWebCam;
 
