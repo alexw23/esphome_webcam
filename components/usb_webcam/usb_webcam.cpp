@@ -60,6 +60,12 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
         ESP_LOGW(TAG, "Frame copy alloc failed, dropping");
         return true;
     }
+    
+    if (frame->data == NULL || frame->data_len == 0) {
+        ESP_LOGW(TAG, "Invalid frame data pointer/length, skipping");
+        return true;
+    }
+    
     memcpy(copy, frame->data, frame->data_len);
 
     s_fb.buf = copy;
