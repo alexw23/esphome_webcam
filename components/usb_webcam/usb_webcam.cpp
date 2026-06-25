@@ -310,7 +310,7 @@ float USBWebCam::get_setup_priority() const { return setup_priority::BUS; }
 
 /* ---------------- public API (specific) ---------------- */
 void USBWebCam::start_stream(camera::CameraRequester requester) {
-  uint32_t val = (uint32_t) requester;
+  uint8_t val = (1U << (uint32_t) requester);
   if (!this->stream_requesters_)
     this->stream_start_callback_.call();
   this->stream_requesters_ |= val;
@@ -319,7 +319,7 @@ void USBWebCam::start_stream(camera::CameraRequester requester) {
 
 void USBWebCam::stop_stream(camera::CameraRequester requester) {
   uint8_t old_mask = this->stream_requesters_;
-  uint32_t val = (uint32_t) requester;
+  uint8_t val = (1U << (uint32_t) requester);
   this->stream_requesters_ &= ~val;
   if (old_mask && !this->stream_requesters_)
     this->stream_stop_callback_.call();
@@ -337,7 +337,7 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
     return;
   }
 
-  uint32_t val = (uint32_t) requester;
+  uint8_t val = (1U << (uint32_t) requester);
   uint32_t now = esp_timer_get_time();
   uint32_t mui = this->max_update_interval_ * 1000;
 
@@ -425,7 +425,7 @@ camera_fb_t *USBWebCamImage::get_raw_buffer() { return this->buffer_; }
 uint8_t *USBWebCamImage::get_data_buffer() { return this->buffer_->buf; }
 size_t USBWebCamImage::get_data_length() { return this->buffer_->len; }
 bool USBWebCamImage::was_requested_by(camera::CameraRequester requester) const {
-  return (this->requesters_ & requester) != 0;
+  return (this->requesters_ & (1U << (uint32_t) requester)) != 0;
 }
 
 
