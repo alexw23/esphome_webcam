@@ -343,19 +343,24 @@ void USBWebCam::stop_stream(camera::CameraRequester requester) {
   ESP_LOGD(TAG, "stop_stream! %d", this->stream_requesters_);
 }
 
+camera_fb_t *esp_camera_fb_get()
+{
+    if (s_fb.buf == NULL) return nullptr;
+    return &s_fb;
+}
+
 void USBWebCam::request_image(camera::CameraRequester requester) {
-  // Don't attempt to get frames until fully ready
   if (!this->camera_ready_ || !this->start_attempted_ || stream_hdl == NULL) {
     return;
   }
 
   uint32_t val = (uint32_t) requester;
-
   uint32_t now = esp_timer_get_time();
   uint32_t mui = this->max_update_interval_ * 1000;
-  if (this->stream_requesters_) { // fast stream requested by web server
+
+  if (this->stream_requesters_) {
     if ((now - this->last_update_) < mui) {
-      if (this->current_image_) // ensure quick start without black screen on web
+      if (this->current_image_)
           this->single_requesters_ |= val;
       return;
     }
@@ -364,24 +369,21 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
     if ((now - this->last_update_) < mui) {
       if ((now - this->last_idle_request_) > mui || !this->current_image_) {
          this->last_idle_request_ = now;
-         this->single_requesters_ |= val; // schedule request
+         this->single_requesters_ |= val;
       }
-      return; // wait
+      return;
     }
   }
-  // take the request
+
   this->single_requesters_ |= val;
 
-  esp_err_t err = ESP_OK;
+  if (stream_hdl == NULL) return;
 
-  if (stream_hdl == NULL) {
-    return;  // camera disconnected, nothing to request
-  }
-  // Always consume frames to prevent buffer starvation
-  camera_fb_t *esp_camera_fb_get()
-  {
-      if (s_fb.buf == NULL) return nullptr;
-      return &s_fb;
+  camera_fb_t *fb = esp_camera_fb_get();
+  if (fb == nullptr) {
+    ESP_LOGV(TAG, "No frame ready yet");
+    this->last_update_ = now;
+    return;
   }
 
   ESP_LOGI(TAG, "fb %p, len %u, wh %ux%u", fb->buf, fb->len, fb->width, fb->height);
