@@ -68,26 +68,23 @@ void esp_camera_fb_return(camera_fb_t *fb)
 
 static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
 {
-    // Log if it's the wrong format
-    if (frame->vs_format.format != UVC_VS_FORMAT_MJPEG) {
-        ESP_LOGV(TAG, "Frame dropped: Not MJPEG. Format enum is %d", frame->vs_format.format);
-        return true; 
-    }
+    if (frame->vs_format.format != UVC_VS_FORMAT_MJPEG) return true;
+    if (frame->data_len < s_drop_frame_size) return true;
 
-    // Log if it's too small
-    if (frame->data_len < s_drop_frame_size) {
-        ESP_LOGV(TAG, "Frame dropped: Too small. Size is %" PRIu32 " bytes", frame->data_len);
-        return true; 
-    }
+    // Copy frame data before returning buffer to driver
+    uint8_t *copy = (uint8_t *)heap_caps_malloc(frame->data_len, MALLOC_CAP_SPIRAM);
+    if (copy == NULL) return true;
+    memcpy(copy, frame->data, frame->data_len);
+    
+    // Store metadata
+    s_fb.buf = copy;
+    s_fb.len = frame->data_len;
+    s_fb.width = frame->vs_format.h_res;
+    s_fb.height = frame->vs_format.v_res;
+    s_fb.format = PIXFORMAT_JPEG;
 
-    uvc_host_frame_t *frame_copy = (uvc_host_frame_t *)frame; 
-    if (xQueueSendToBack(s_frame_queue, &frame_copy, 0) == pdPASS) {
-        ESP_LOGI(TAG, "SUCCESS! Frame queued. Size: %" PRIu32, frame->data_len);
-        return false; 
-    }
-
-    ESP_LOGW(TAG, "Queue full, dropping valid MJPEG frame");
-    return true; 
+    ESP_LOGI(TAG, "Frame copied: %" PRIu32 " bytes", frame->data_len);
+    return true; // always return buffer to driver
 }
 
 static void stream_callback(const uvc_host_stream_event_data_t *event, void *user_ctx)
@@ -304,9 +301,8 @@ void USBWebCam::loop() {
       this->camera_ready_ = true;
     }
   }
-  if (this->has_requested_image_() || this->stream_requesters_) {
-    request_image(camera::IDLE);
-  }
+  // Always drain frames to prevent buffer starvation
+  request_image(camera::IDLE);
 }
 
 void USBWebCam::dump_config() {
@@ -370,14 +366,11 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
   if (stream_hdl == NULL) {
     return;  // camera disconnected, nothing to request
   }
+  // Always consume frames to prevent buffer starvation
   camera_fb_t *fb = esp_camera_fb_get();
-  if (fb == nullptr) {
-    // Change to Verbose or Debug so it doesn't flood your logs
-    ESP_LOGV(TAG, "No frame ready in queue yet."); 
-    
-    // Throttle the next check so we don't hammer the CPU
-    this->last_update_ = now; 
-    return;
+  if (fb != nullptr) {
+      ESP_LOGI(TAG, "Frame drained: %zu bytes", fb->len);
+      heap_caps_free(fb->buf);
   }
   ESP_LOGI(TAG, "fb %p, len %u, wh %ux%u", fb->buf, fb->len, fb->width, fb->height);
 
