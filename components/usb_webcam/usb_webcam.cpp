@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // This file is derrived from esp32_camera component of ESPHome and from usb_camera_mic_spk example by Espressif
-
+#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #ifdef USE_ESP32
 
 #include "usb_webcam.h"
@@ -41,8 +41,9 @@ void esp_camera_fb_return(camera_fb_t *fb)
 
 static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
 {
-    ESP_LOGI(TAG, "FRAME_CB called: format=%d len=%" PRIu32, 
-        frame->vs_format.format, frame->data_len);
+    s_frame_cb_count++;
+    ESP_LOGI(TAG, "FRAME_CB #%d format=%d len=%" PRIu32, 
+        s_frame_cb_count, frame->vs_format.format, frame->data_len);
     
     if (frame->vs_format.format != UVC_VS_FORMAT_MJPEG) {
         ESP_LOGW(TAG, "Wrong format: %d (expected MJPEG=%d)", 
@@ -251,9 +252,9 @@ void USBWebCam::setup() {
 void USBWebCam::loop() {
   static uint32_t hb = 0;
   if (++hb % 100 == 0) {
-    ESP_LOGV(TAG, "HEARTBEAT: init_done=%d ready=%d hdl=%p attempts=%d start_ret=%d (%s)",
+    ESP_LOGV(TAG, "HEARTBEAT: init_done=%d ready=%d hdl=%p attempts=%d start_ret=%d s_frame_cb_count=%d (%s)",
     this->camera_init_done_, this->camera_ready_, stream_hdl, this->open_attempts_,
-    this->last_start_ret_, esp_err_to_name(this->last_start_ret_));
+    this->last_start_ret_, s_frame_cb_count, esp_err_to_name(this->last_start_ret_));
   }
   static bool logged = false;
   if (this->camera_init_done_ && !logged) {
