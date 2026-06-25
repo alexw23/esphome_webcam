@@ -302,7 +302,9 @@ void USBWebCam::loop() {
     }
   }
   // Always drain frames to prevent buffer starvation
-  request_image(camera::IDLE);
+  if (this->camera_ready_ && this->start_attempted_) {
+    request_image(camera::IDLE);
+  }
 }
 
 void USBWebCam::dump_config() {
@@ -338,6 +340,11 @@ void USBWebCam::stop_stream(camera::CameraRequester requester) {
 }
 
 void USBWebCam::request_image(camera::CameraRequester requester) {
+  // Don't attempt to get frames until fully ready
+  if (!this->camera_ready_ || !this->start_attempted_ || stream_hdl == NULL) {
+    return;
+  }
+
   uint32_t val = (uint32_t) requester;
 
   uint32_t now = esp_timer_get_time();
