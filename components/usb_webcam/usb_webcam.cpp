@@ -45,7 +45,7 @@ void esp_camera_fb_return(camera_fb_t *fb)
 
 static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
 {
-    ESP_LOGD(TAG, "frame_cb: frame=%p, data=%p, len=%zu, format=%d, h_res=%d, v_res=%d, fps=%.2f",
+    ESP_LOGV(TAG, "frame_cb: frame=%p, data=%p, len=%zu, format=%d, h_res=%d, v_res=%d, fps=%.2f",
              frame, frame->data, frame->data_len, frame->vs_format.format,
              frame->vs_format.h_res, frame->vs_format.v_res, frame->vs_format.fps);
              
