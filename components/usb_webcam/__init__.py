@@ -147,6 +147,7 @@ async def to_code(config):
             name="usb_host_uvc",
             repo="https://github.com/alexw23/esp-usb.git",
             path="host/class/uvc/usb_host_uvc"
+            ref="45119e5"
     )
     
     # add_idf_component(
