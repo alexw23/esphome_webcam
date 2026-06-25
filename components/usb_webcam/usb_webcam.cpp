@@ -16,7 +16,7 @@
 
 #include <freertos/event_groups.h>
 #include <freertos/task.h>
-#include <freertos/semphr.h>
+
 
 static const char *const TAG = "usb_webcam";
 
@@ -29,7 +29,6 @@ namespace esphome::usb_webcam {
 static uint32_t s_drop_frame_size = 0;
 static camera_fb_t s_fb;
 static uvc_host_stream_hdl_t stream_hdl = NULL;
-static SemaphoreHandle_t fb_mutex = nullptr;
 static int s_frame_cb_count = 0;
 
 void esp_camera_fb_return(camera_fb_t *fb)
@@ -50,16 +49,7 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
     if (frame->data_len < s_drop_frame_size) return true;
 
     // Drop incoming frame if previous one is still being consumed
-    if (fb_mutex == nullptr) {
-        return true;
-    }
-
-    if (xSemaphoreTake(fb_mutex, pdMS_TO_TICKS(10)) != pdTRUE) {
-        return true;
-    }
-
     if (s_fb.buf != NULL) {
-        xSemaphoreGive(fb_mutex);
         return true;
     }
 
@@ -78,36 +68,22 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
     s_fb.height = frame->vs_format.v_res;
     s_fb.format = PIXFORMAT_JPEG;
 
-    xSemaphoreGive(fb_mutex);
+    return true;
 }
 
 static void stream_callback(const uvc_host_stream_event_data_t *event, void *user_ctx)
 {
-    if (event == nullptr) {
-        ESP_LOGE(TAG, "NULL stream event");
-        return;
-    }
-
     ESP_LOGV(TAG, "STREAM_EVENT type=%d", event->type);
 
     switch (event->type) {
-
     case UVC_HOST_TRANSFER_ERROR:
-        ESP_LOGE(TAG, "USB transfer error");
+        ESP_LOGE(TAG, "USB error");
         break;
-
     case UVC_HOST_DEVICE_DISCONNECTED:
         ESP_LOGI(TAG, "Device disconnected");
-
-        if (event->device_disconnected.stream_hdl != NULL) {
-            uvc_host_stream_close(
-                event->device_disconnected.stream_hdl
-            );
-        }
-
+        uvc_host_stream_close(event->device_disconnected.stream_hdl);
         stream_hdl = NULL;
         break;
-
     default:
         break;
     }
@@ -139,12 +115,12 @@ esp_err_t usb_host_drivers_install() {
               usb_host_device_free_all();
           }
       }
-  }, "usb_events", 4096, NULL, 4, NULL, 0);  // core 0
+  }, "usb_events", 4096, NULL, 15, NULL, tskNO_AFFINITY);  // core 0
 
   const uvc_host_driver_config_t uvc_driver_config = {
       .driver_task_stack_size = 8 * 1024,
-      .driver_task_priority = 4,
-      .xCoreID = 0,
+      .driver_task_priority = 16,
+      .xCoreID = tskNO_AFFINITY,
       .create_background_task = true,
   };
   err = uvc_host_install(&uvc_driver_config);
@@ -198,11 +174,11 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
           .format = UVC_VS_FORMAT_MJPEG,
       },
       .advanced = {
-          .number_of_frame_buffers = 2,
+          .number_of_frame_buffers = 3,
           .frame_size = 600000,
           .frame_heap_caps = MALLOC_CAP_SPIRAM,
-          .number_of_urbs = 3,
-          .urb_size = 3 * 1024,
+          .number_of_urbs = 4,
+          .urb_size = 10 * 1024,
           .user_frame_buffers = NULL,
       },
   };
@@ -244,16 +220,6 @@ void USBWebCam::camera_init_task(void *pv) {
 void USBWebCam::setup() {
   global_usb_webcam = this;
   this->last_update_ = esp_timer_get_time();
-
-  fb_mutex = xSemaphoreCreateMutex();
-
-  if (fb_mutex == nullptr) {
-    ESP_LOGE(TAG, "Failed to create framebuffer mutex");
-    this->init_error_ = ESP_ERR_NO_MEM;
-    this->camera_init_done_ = true;
-    return;
-  }
-
 
   // Configure status LED
   gpio_reset_pin(GPIO_NUM_15);
@@ -357,23 +323,8 @@ void USBWebCam::stop_stream(camera::CameraRequester requester) {
 
 camera_fb_t *esp_camera_fb_get()
 {
-    if (fb_mutex == nullptr) {
-        return nullptr;
-    }
-
-    if (xSemaphoreTake(fb_mutex, pdMS_TO_TICKS(10)) != pdTRUE) {
-        return nullptr;
-    }
-
-    camera_fb_t *ret = nullptr;
-
-    if (s_fb.buf != NULL) {
-        ret = &s_fb;
-    }
-
-    xSemaphoreGive(fb_mutex);
-
-    return ret;
+    if (s_fb.buf == NULL) return nullptr;
+    return &s_fb;
 }
 
 void USBWebCam::request_image(camera::CameraRequester requester) {
