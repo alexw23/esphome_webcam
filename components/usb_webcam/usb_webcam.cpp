@@ -51,24 +51,30 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
              
     if (frame->vs_format.format != UVC_VS_FORMAT_MJPEG) return true;
 
-    xSemaphoreTake(s_buffer_mutex, portMAX_DELAY);
-    if (!s_free_buffers.empty()) {
-        uint8_t *buf = s_free_buffers.front();
-        s_free_buffers.pop();
-        memcpy(buf, frame->data, frame->data_len);
-
-        // Don't use 'new' here! 
-        // Use a persistent object or the existing buffer pool structure
-        camera_fb_t *fb = new camera_fb_t(); // This is the leak
-        fb->buf = buf;
-        fb->len = frame->data_len;
-        fb->width = frame->vs_format.h_res;
-        fb->height = frame->vs_format.v_res;
-        fb->format = PIXFORMAT_JPEG;
+    if (xSemaphoreTake(s_buffer_mutex, 0) == pdTRUE) {
         
-        s_ready_buffers.push(fb);
+        // Only process if we have an empty slot available
+        if (!s_free_buffers.empty()) {
+            uint8_t *buf = s_free_buffers.front();
+            s_free_buffers.pop();
+            memcpy(buf, frame->data, frame->data_len);
+
+            // Use your wrapper structure here
+            camera_fb_t *fb = new camera_fb_t(); 
+            fb->buf = buf;
+            fb->len = frame->data_len;
+            fb->width = frame->vs_format.h_res;
+            fb->height = frame->vs_format.v_res;
+            fb->format = PIXFORMAT_JPEG;
+            
+            s_ready_buffers.push(fb);
+        }
+        
+        xSemaphoreGive(s_buffer_mutex);
+    } else {
+        // Mutex was busy, just return true to let the driver keep going
+        ESP_LOGV(TAG, "Frame dropped: Mutex busy");
     }
-    xSemaphoreGive(s_buffer_mutex);
     return true;
 }
 
