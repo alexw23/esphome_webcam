@@ -41,7 +41,6 @@ void esp_camera_fb_return(camera_fb_t *fb)
         
         fb->buf = NULL;
     }
-    delete fb; // Clean up the struct wrapper
 }
 
 static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
@@ -58,7 +57,9 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
         s_free_buffers.pop();
         memcpy(buf, frame->data, frame->data_len);
 
-        camera_fb_t *fb = new camera_fb_t();
+        // Don't use 'new' here! 
+        // Use a persistent object or the existing buffer pool structure
+        camera_fb_t *fb = new camera_fb_t(); // This is the leak
         fb->buf = buf;
         fb->len = frame->data_len;
         fb->width = frame->vs_format.h_res;
