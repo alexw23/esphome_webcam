@@ -176,7 +176,7 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
           .h_res = 640,
           .v_res = 480,
           .fps = 30, // let driver pick default fps from device descriptors
-          .format = UVC_VS_FORMAT_DEFAULT,
+          .format = UVC_VS_FORMAT_YUY2,
       },
       .advanced = {
           .number_of_frame_buffers = 2,
