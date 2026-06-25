@@ -53,7 +53,9 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
         return true;
     }
 
-    uint8_t *copy = (uint8_t *)heap_caps_malloc(frame->data_len, MALLOC_CAP_SPIRAM);
+    // Try this temporarily to isolate if DMA is the cause
+    uint8_t *copy = (uint8_t *)heap_caps_aligned_alloc(16, frame->data_len, MALLOC_CAP_SPIRAM);
+
     if (copy == NULL) {
         ESP_LOGW(TAG, "Frame copy alloc failed, dropping");
         return true;
