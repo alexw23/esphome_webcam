@@ -170,7 +170,7 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
       .vs_format = {
           .h_res = frame_width,
           .v_res = frame_height,
-          .fps = fps, // let driver pick default fps from device descriptors
+          .fps = (float)fps,
           .format = UVC_VS_FORMAT_MJPEG,
       },
       .advanced = {
