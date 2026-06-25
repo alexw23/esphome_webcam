@@ -83,17 +83,31 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
 
 static void stream_callback(const uvc_host_stream_event_data_t *event, void *user_ctx)
 {
+    if (event == nullptr) {
+        ESP_LOGE(TAG, "NULL stream event");
+        return;
+    }
+
     ESP_LOGV(TAG, "STREAM_EVENT type=%d", event->type);
 
     switch (event->type) {
+
     case UVC_HOST_TRANSFER_ERROR:
-        ESP_LOGE(TAG, "USB error");
+        ESP_LOGE(TAG, "USB transfer error");
         break;
+
     case UVC_HOST_DEVICE_DISCONNECTED:
         ESP_LOGI(TAG, "Device disconnected");
-        uvc_host_stream_close(event->device_disconnected.stream_hdl);
+
+        if (event->device_disconnected.stream_hdl != NULL) {
+            uvc_host_stream_close(
+                event->device_disconnected.stream_hdl
+            );
+        }
+
         stream_hdl = NULL;
         break;
+
     default:
         break;
     }
