@@ -61,26 +61,20 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
         return true;
     }
 
-    // 2. OPTIMIZATION: Make sure you aren't fighting the memory allocator.
+    // 1. Allocate with 16-byte alignment and DMA support. 
+    // This is the "magic" that satisfies the P4 memory controller.
     uint8_t *copy = (uint8_t *)heap_caps_aligned_alloc(16, frame->data_len, MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA);
 
     if (copy == NULL) {
-        ESP_LOGW(TAG, "Frame allocation failed. Check if frame_buffer_size is too small.");
-        return true; // Gracefully drop this frame to prevent a crash
+        ESP_LOGW(TAG, "Frame alloc failed, dropping");
+        return true;
     }
 
-    #ifdef CONFIG_IDF_TARGET_ESP32P4
-        // P4 specific optimization: Use DMA-accelerated memory copy
-        // Note: Ensure your destination buffer is DMA-capable (MALLOC_CAP_DMA)
-        esp_err_t err = esp_rom_aligned_memcpy(copy, frame->data, frame->data_len);
-        if (err != ESP_OK) {
-            // Fallback to standard memcpy if DMA fails
-            memcpy(copy, frame->data, frame->data_len);
-        }
-    #else
-        // Standard memcpy for S3 or other targets
-        memcpy(copy, frame->data, frame->data_len);
-    #endif
+    // 2. Standard memcpy is perfect. 
+    // Now that 'copy' is 16-byte aligned, this will execute at max hardware speed.
+    memcpy(copy, frame->data, frame->data_len);
+
+    s_fb.buf = copy;
 
     s_fb.buf = copy;
     s_fb.len = frame->data_len;
