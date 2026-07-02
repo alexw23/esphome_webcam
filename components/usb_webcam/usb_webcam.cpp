@@ -22,13 +22,13 @@ extern "C" esp_err_t uvc_host_usb_ctrl(uvc_host_stream_hdl_t stream_hdl, uint8_t
 
 static const char *const TAG = "usb_webcam";
 
-static uint32_t fetch_pu_bitmap(uint8_t unit_id);
-
 #define BIT0_FRAME_START     (0x01 << 0)
 #define BIT1_NEW_FRAME_START (0x01 << 1)
 #define BIT2_NEW_FRAME_END   (0x01 << 2)
 
 namespace esphome::usb_webcam {
+
+static uint32_t fetch_pu_bitmap(uint8_t unit_id);
 
 static uint32_t s_drop_frame_size = 0;
 static camera_fb_t s_fb;
