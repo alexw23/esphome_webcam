@@ -152,15 +152,16 @@ async def to_code(config):
     cg.add(var.set_processing_unit_id(config[CONF_PROCESSING_UNIT_ID]))
 
     parent_id = config[CONF_ID].id
-    for ctrl_name, setter in [
-        ("brightness", "set_brightness_number"),
-        ("contrast",   "set_contrast_number"),
-        ("saturation", "set_saturation_number"),
-        ("hue",        "set_hue_number"),
-        ("sharpness",  "set_sharpness_number"),
+    for ctrl_name, setter, selector in [
+        ("brightness", "set_brightness_number", 0x02),
+        ("contrast",   "set_contrast_number",   0x03),
+        ("saturation", "set_saturation_number", 0x07),
+        ("hue",        "set_hue_number",        0x06),
+        ("sharpness",  "set_sharpness_number",  0x08),
     ]:
         num_id = ID(f"{parent_id}_{ctrl_name}", is_declaration=True, type=USBWebCamNumber)
         num_var = cg.new_Pvariable(num_id)
+        cg.add(num_var.set_selector(selector))
         await number.register_number(
             num_var,
             {
