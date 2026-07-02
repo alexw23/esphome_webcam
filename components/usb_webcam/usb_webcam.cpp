@@ -22,6 +22,8 @@ extern "C" esp_err_t uvc_host_usb_ctrl(uvc_host_stream_hdl_t stream_hdl, uint8_t
 
 static const char *const TAG = "usb_webcam";
 
+static uint32_t fetch_pu_bitmap(uint8_t unit_id);
+
 #define BIT0_FRAME_START     (0x01 << 0)
 #define BIT1_NEW_FRAME_START (0x01 << 1)
 #define BIT2_NEW_FRAME_END   (0x01 << 2)
@@ -210,7 +212,7 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
   }
 
   global_usb_webcam->stream_opened_ = true;
-  global_usb_webcam->pu_controls_bitmap_ = fetch_pu_bitmap(global_usb_webcam->processing_unit_id_);
+  global_usb_webcam->set_pu_controls_bitmap(fetch_pu_bitmap(global_usb_webcam->get_processing_unit_id()));
   ESP_LOGI(TAG, "Stream opened, deferring start to main loop");
   return ESP_OK;
 }
