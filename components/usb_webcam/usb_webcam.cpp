@@ -360,8 +360,14 @@ void USBWebCam::loop() {
           ESP_LOGI(TAG, "  opt[%d]='%s'", (int)opts.size() - 1, lbl.c_str());
       }
       this->mode_select_->traits.set_options(opts);
-      auto stored = this->mode_select_->traits.get_options();
-      ESP_LOGI(TAG, "loop: traits now has %d options", (int)stored.size());
+      const auto &stored = this->mode_select_->traits.get_options();
+      int stored_count = 0;
+      bool pending_found = false;
+      for (const auto *opt : stored) {
+          if (this->pending_mode_label_ == opt) pending_found = true;
+          stored_count++;
+      }
+      ESP_LOGI(TAG, "loop: traits has %d options, pending found=%s", stored_count, pending_found ? "YES" : "NO");
       this->mode_select_->publish_state(this->pending_mode_label_);
       this->pending_mode_label_.clear();
   }
