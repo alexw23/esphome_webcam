@@ -455,6 +455,13 @@ void USBWebCam::update_camera_parameters() {
     global_usb_webcam->controls_probed_ = true;
 }
 
+struct ControlChange {
+    uint8_t selector;
+    int16_t value;
+    uint8_t unit_id;
+    USBWebCamNumber *number;
+};
+
 void USBWebCamNumber::control(float value) {
     if (stream_hdl == NULL || global_usb_webcam == nullptr) return;
     if (!global_usb_webcam->is_controls_probed()) {
@@ -467,12 +474,23 @@ void USBWebCamNumber::control(float value) {
         ESP_LOGE(TAG, "Value %.0f out of range [%d, %d]", value, min_v, max_v);
         return;
     }
-    esp_err_t err = pu_set(stream_hdl, global_usb_webcam->get_processing_unit_id(), selector_, (int16_t)value);
-    if (err == ESP_OK) {
-        publish_state(value);
-    } else {
-        ESP_LOGW(TAG, "Failed to set control 0x%02x: %s", selector_, esp_err_to_name(err));
-    }
+    auto *change = new ControlChange{selector_, (int16_t)value, global_usb_webcam->get_processing_unit_id(), this};
+    xTaskCreate([](void *arg) {
+        auto *c = static_cast<ControlChange *>(arg);
+        ESP_LOGI(TAG, "Setting control 0x%02x = %d (stop/set/start)", c->selector, c->value);
+        uvc_host_stream_stop(stream_hdl);
+        vTaskDelay(pdMS_TO_TICKS(50));
+        esp_err_t err = pu_set(stream_hdl, c->unit_id, c->selector, c->value);
+        if (err == ESP_OK) {
+            c->number->publish_state(c->value);
+            ESP_LOGI(TAG, "Control 0x%02x set OK", c->selector);
+        } else {
+            ESP_LOGW(TAG, "Failed to set control 0x%02x: %s", c->selector, esp_err_to_name(err));
+        }
+        uvc_host_stream_start(stream_hdl);
+        delete c;
+        vTaskDelete(NULL);
+    }, "ctrl_set", 4096, change, 3, NULL);
 }
 
 void USBWebCamButton::press_action() {
