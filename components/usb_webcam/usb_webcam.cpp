@@ -6,6 +6,7 @@
 #include "esphome/components/camera/camera.h"
 #include "usb/uvc_host.h"
 #include "usb/usb_host.h"
+#include "esp_private/uvc_control.h"
 #include "esp_timer.h"
 #ifdef CONFIG_ESP32_S3_USB_OTG
 #include "bsp/esp-bsp.h"
@@ -286,6 +287,7 @@ void USBWebCam::loop() {
       ESP_LOGE(TAG, "stream_start FAILED: %d (%s)", ret, esp_err_to_name(ret));
     } else {
       ESP_LOGI(TAG, "Stream started — waiting for frames from callback");
+      this->update_camera_parameters();
     }
   }
   if (!this->camera_ready_) {
@@ -401,8 +403,45 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
   this->last_update_ = now;
 }
 
+static esp_err_t pu_get(uvc_host_stream_hdl_t hdl, uint8_t unit_id, uint8_t selector, int16_t *out) {
+    uint8_t data[2] = {0};
+    esp_err_t err = uvc_host_usb_ctrl(hdl, 0xA1, UVC_GET_CUR, (uint16_t)(selector << 8), (uint16_t)(unit_id << 8), 2, data);
+    if (err == ESP_OK) *out = (int16_t)(data[0] | (data[1] << 8));
+    return err;
+}
+
+static esp_err_t pu_set(uvc_host_stream_hdl_t hdl, uint8_t unit_id, uint8_t selector, int16_t value) {
+    uint8_t data[2] = {(uint8_t)(value & 0xFF), (uint8_t)((value >> 8) & 0xFF)};
+    return uvc_host_usb_ctrl(hdl, 0x21, UVC_SET_CUR, (uint16_t)(selector << 8), (uint16_t)(unit_id << 8), 2, data);
+}
+
 void USBWebCam::update_camera_parameters() {
-// TODO
+    if (stream_hdl == NULL) return;
+
+    struct { uint8_t selector; const char *name; int32_t value; } controls[] = {
+        {0x02, "brightness", brightness_},
+        {0x03, "contrast",   contrast_},
+        {0x07, "saturation", saturation_},
+        {0x06, "hue",        hue_},
+        {0x08, "sharpness",  sharpness_},
+    };
+
+    for (auto &ctrl : controls) {
+        int16_t current;
+        esp_err_t err = pu_get(stream_hdl, processing_unit_id_, ctrl.selector, &current);
+        if (err != ESP_OK) {
+            ESP_LOGD(TAG, "Control '%s' not supported (PU=%d): %s", ctrl.name, processing_unit_id_, esp_err_to_name(err));
+            continue;
+        }
+        ESP_LOGI(TAG, "Control '%s' supported, current=%d", ctrl.name, current);
+        if (ctrl.value == INT32_MIN) continue;
+        err = pu_set(stream_hdl, processing_unit_id_, ctrl.selector, (int16_t)ctrl.value);
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to set '%s'=%d: %s", ctrl.name, (int)ctrl.value, esp_err_to_name(err));
+        } else {
+            ESP_LOGI(TAG, "Set '%s' = %d", ctrl.name, (int)ctrl.value);
+        }
+    }
 }
 
 void USBWebCam::add_stream_start_callback(std::function<void()> &&callback) {

@@ -79,6 +79,14 @@ CONF_IDLE_FRAMERATE = "idle_framerate"
 CONF_DROP_FRAME_SIZE = "drop_frame_size"
 CONF_FRAME_BUFFER_SIZE = "frame_buffer_size"
 
+# camera controls
+CONF_BRIGHTNESS = "brightness"
+CONF_CONTRAST = "contrast"
+CONF_SATURATION = "saturation"
+CONF_HUE = "hue"
+CONF_SHARPNESS = "sharpness"
+CONF_PROCESSING_UNIT_ID = "processing_unit_id"
+
 # stream trigger
 CONF_ON_STREAM_START = "on_stream_start"
 CONF_ON_STREAM_STOP = "on_stream_stop"
@@ -103,6 +111,13 @@ CONFIG_SCHEMA = cv.ENTITY_BASE_SCHEMA.extend(
         cv.Optional(CONF_FRAME_BUFFER_SIZE, default="65536"): cv.All(
             cv.int_range(min=10240, max=524288)
         ),
+        # camera controls (optional; omit to leave at device default)
+        cv.Optional(CONF_BRIGHTNESS): cv.int_range(min=-32768, max=32767),
+        cv.Optional(CONF_CONTRAST): cv.int_range(min=-32768, max=32767),
+        cv.Optional(CONF_SATURATION): cv.int_range(min=-32768, max=32767),
+        cv.Optional(CONF_HUE): cv.int_range(min=-32768, max=32767),
+        cv.Optional(CONF_SHARPNESS): cv.int_range(min=-32768, max=32767),
+        cv.Optional(CONF_PROCESSING_UNIT_ID, default=2): cv.int_range(min=1, max=255),
         cv.Optional(CONF_ON_STREAM_START): automation.validate_automation(
             {
                 cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(
@@ -139,6 +154,16 @@ async def to_code(config):
     cg.add(var.set_drop_size(config[CONF_DROP_FRAME_SIZE]))
     cg.add(var.set_frame_buffer_size(config[CONF_FRAME_BUFFER_SIZE]))
     cg.add(var.set_frame_size(config[CONF_RESOLUTION]))
+    cg.add(var.set_processing_unit_id(config[CONF_PROCESSING_UNIT_ID]))
+    for conf_key, setter in [
+        (CONF_BRIGHTNESS, "set_brightness"),
+        (CONF_CONTRAST,   "set_contrast"),
+        (CONF_SATURATION, "set_saturation"),
+        (CONF_HUE,        "set_hue"),
+        (CONF_SHARPNESS,  "set_sharpness"),
+    ]:
+        if conf_key in config:
+            cg.add(getattr(var, setter)(config[conf_key]))
 
     cg.add_define("USE_USB_WEBCAM")
 
