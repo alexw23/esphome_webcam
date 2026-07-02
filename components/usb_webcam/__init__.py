@@ -13,13 +13,12 @@ from esphome.const import (
     CONF_ID,
     CONF_MODE,
     CONF_NAME,
-    CONF_RESOLUTION,
     CONF_TRIGGER_ID,
 )
 from esphome.core import CORE, TimePeriod, ID
 from esphome.components.esp32 import add_idf_sdkconfig_option
 from esphome.components.esp32 import add_idf_component
-from esphome.components import number, button
+from esphome.components import number, button, select
 try:
   from esphome.cpp_helpers import setup_entity
 except:
@@ -27,12 +26,13 @@ except:
 
 DEPENDENCIES = ["esp32", "camera"]
 
-AUTO_LOAD = ["camera", "psram", "number", "button"]
+AUTO_LOAD = ["camera", "psram", "number", "button", "select"]
 
 usb_webcam_ns = cg.esphome_ns.namespace("usb_webcam")
 USBWebCam = usb_webcam_ns.class_("USBWebCam", cg.PollingComponent, cg.EntityBase)
 USBWebCamNumber = usb_webcam_ns.class_("USBWebCamNumber", number.Number)
 USBWebCamButton = usb_webcam_ns.class_("USBWebCamButton", button.Button)
+USBWebCamSelect = usb_webcam_ns.class_("USBWebCamSelect", select.Select)
 USBWebCamStreamStartTrigger = usb_webcam_ns.class_(
     "USBWebCamStreamStartTrigger",
     automation.Trigger.template(),
@@ -41,45 +41,6 @@ USBWebCamStreamStopTrigger = usb_webcam_ns.class_(
     "USBWebCamStreamStopTrigger",
     automation.Trigger.template(),
 )
-USBWebCamFrameSize = usb_webcam_ns.enum("USBWebCamFrameSize")
-FRAME_SIZES = {
-    "160X120": USBWebCamFrameSize.USB_WEBCAM_SIZE_160X120,
-    "QQVGA": USBWebCamFrameSize.USB_WEBCAM_SIZE_160X120,
-    "176X144": USBWebCamFrameSize.USB_WEBCAM_SIZE_176X144,
-    "QCIF": USBWebCamFrameSize.USB_WEBCAM_SIZE_176X144,
-    "240X176": USBWebCamFrameSize.USB_WEBCAM_SIZE_240X176,
-    "HQVGA": USBWebCamFrameSize.USB_WEBCAM_SIZE_240X176,
-    "320X240": USBWebCamFrameSize.USB_WEBCAM_SIZE_320X240,
-    "QVGA": USBWebCamFrameSize.USB_WEBCAM_SIZE_320X240,
-    "400X296": USBWebCamFrameSize.USB_WEBCAM_SIZE_400X296,
-    "CIF": USBWebCamFrameSize.USB_WEBCAM_SIZE_400X296,
-    "640X480": USBWebCamFrameSize.USB_WEBCAM_SIZE_640X480,
-    "VGA": USBWebCamFrameSize.USB_WEBCAM_SIZE_640X480,
-    "800X600": USBWebCamFrameSize.USB_WEBCAM_SIZE_800X600,
-    "SVGA": USBWebCamFrameSize.USB_WEBCAM_SIZE_800X600,
-    "1024X768": USBWebCamFrameSize.USB_WEBCAM_SIZE_1024X768,
-    "XGA": USBWebCamFrameSize.USB_WEBCAM_SIZE_1024X768,
-    "1280X1024": USBWebCamFrameSize.USB_WEBCAM_SIZE_1280X1024,
-    "SXGA": USBWebCamFrameSize.USB_WEBCAM_SIZE_1280X1024,
-    "1600X1200": USBWebCamFrameSize.USB_WEBCAM_SIZE_1600X1200,
-    "UXGA": USBWebCamFrameSize.USB_WEBCAM_SIZE_1600X1200,
-    "1920X1080": USBWebCamFrameSize.USB_WEBCAM_SIZE_1920X1080,
-    "FHD": USBWebCamFrameSize.USB_WEBCAM_SIZE_1920X1080,
-    "720X1280": USBWebCamFrameSize.USB_WEBCAM_SIZE_720X1280,
-    "PHD": USBWebCamFrameSize.USB_WEBCAM_SIZE_720X1280,
-    "864X1536": USBWebCamFrameSize.USB_WEBCAM_SIZE_864X1536,
-    "P3MP": USBWebCamFrameSize.USB_WEBCAM_SIZE_864X1536,
-    "2048X1536": USBWebCamFrameSize.USB_WEBCAM_SIZE_2048X1536,
-    "QXGA": USBWebCamFrameSize.USB_WEBCAM_SIZE_2048X1536,
-    "2560X1440": USBWebCamFrameSize.USB_WEBCAM_SIZE_2560X1440,
-    "QHD": USBWebCamFrameSize.USB_WEBCAM_SIZE_2560X1440,
-    "2560X1600": USBWebCamFrameSize.USB_WEBCAM_SIZE_2560X1600,
-    "WQXGA": USBWebCamFrameSize.USB_WEBCAM_SIZE_2560X1600,
-    "1080X1920": USBWebCamFrameSize.USB_WEBCAM_SIZE_1080X1920,
-    "PFHD": USBWebCamFrameSize.USB_WEBCAM_SIZE_1080X1920,
-    "2560X1920": USBWebCamFrameSize.USB_WEBCAM_SIZE_2560X1920,
-    "QSXGA": USBWebCamFrameSize.USB_WEBCAM_SIZE_2560X1920,
-}
 
 # frames
 CONF_MAX_FRAMERATE = "max_framerate"
@@ -96,10 +57,6 @@ CONF_ON_STREAM_STOP = "on_stream_stop"
 CONFIG_SCHEMA = cv.ENTITY_BASE_SCHEMA.extend(
     {
         cv.GenerateID(): cv.declare_id(USBWebCam),
-        # image
-        cv.Optional(CONF_RESOLUTION, default="640X480"): cv.enum(
-            FRAME_SIZES, upper=True
-        ),
         # framerates
         cv.Optional(CONF_MAX_FRAMERATE, default="5 fps"): cv.All(
             cv.framerate, cv.Range(min=0, min_included=False, max=60)
@@ -149,11 +106,10 @@ async def to_code(config):
         cg.add(var.set_idle_update_interval(1000 / config[CONF_IDLE_FRAMERATE]))
     cg.add(var.set_drop_size(config[CONF_DROP_FRAME_SIZE]))
     cg.add(var.set_frame_buffer_size(config[CONF_FRAME_BUFFER_SIZE]))
-    cg.add(var.set_frame_size(config[CONF_RESOLUTION]))
     cg.add(var.set_processing_unit_id(config[CONF_PROCESSING_UNIT_ID]))
 
     parent_id = config[CONF_ID].id
-    for ctrl_name, setter, selector in [
+    for ctrl_name, setter, selector_id in [
         ("brightness", "set_brightness_number", 0x02),
         ("contrast",   "set_contrast_number",   0x03),
         ("saturation", "set_saturation_number", 0x07),
@@ -162,7 +118,7 @@ async def to_code(config):
     ]:
         num_id = ID(f"{parent_id}_{ctrl_name}", is_declaration=True, type=USBWebCamNumber)
         num_var = cg.new_Pvariable(num_id)
-        cg.add(num_var.set_selector(selector))
+        cg.add(num_var.set_selector(selector_id))
         await number.register_number(
             num_var,
             {
@@ -190,6 +146,18 @@ async def to_code(config):
     })
     cg.add(var.set_stream_button(btn_var))
 
+    sel_id = ID(f"{parent_id}_video_mode", is_declaration=True, type=USBWebCamSelect)
+    sel_var = cg.new_Pvariable(sel_id)
+    await select.register_select(sel_var, {
+        CONF_ID: sel_id,
+        CONF_NAME: "Video Mode",
+        CONF_DISABLED_BY_DEFAULT: False,
+        CONF_ICON: "mdi:video",
+        CONF_ENTITY_CATEGORY: "",
+    }, options=["(detecting...)"])
+    cg.add(sel_var.set_parent(var))
+    cg.add(var.set_mode_select(sel_var))
+
     cg.add_define("USE_USB_WEBCAM")
 
     # assert(CORE.is_esp_idf)
@@ -198,21 +166,15 @@ async def to_code(config):
             repo="https://github.com/alexw23/esp-usb.git",
             path="host/class/uvc/usb_host_uvc"
     )
-    
-    # add_idf_component(
-    #     name="espressif/usb_host_uvc",
-    #     ref="2.5.1"
-    # )
-    # no need in cg.add_library("espressif/esp32-camera", "1.0.0")
-    # esp_camera.h and sensor.h are taken from it directly
+
     for d, v in {
         #"CONFIG_ESP_SYSTEM_PANIC_PRINT_HALT": True,
         "CONFIG_RTCIO_SUPPORT_RTC_GPIO_DESC": True,
         "CONFIG_USB_OTG_SUPPORTED": True,
         "CONFIG_SOC_USB_OTG_SUPPORTED": True,
-        "CONFIG_SPIRAM_USE_MALLOC": True, # buffers are big, better let everyone allocate PSRAM
-        "CONFIG_ESP_WIFI_IRAM_OPT": False,    # free up IRAM interrupt slots for USB host
-        "CONFIG_ESP_WIFI_RX_IRAM_OPT": False, # free up IRAM interrupt slots for USB host
+        "CONFIG_SPIRAM_USE_MALLOC": True,
+        "CONFIG_ESP_WIFI_IRAM_OPT": False,
+        "CONFIG_ESP_WIFI_RX_IRAM_OPT": False,
     }.items():
         add_idf_sdkconfig_option(d, v)
 

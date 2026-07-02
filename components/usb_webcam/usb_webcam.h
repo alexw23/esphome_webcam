@@ -10,8 +10,10 @@
 #include "esphome/core/component.h"
 #include "esphome/components/camera/camera.h"
 #include "esphome/core/helpers.h"
+#include "esphome/core/preferences.h"
 #include "usb_webcam_number.h"
 #include "usb_webcam_button.h"
+#include "usb_webcam_select.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <vector>
@@ -32,27 +34,6 @@ typedef enum {
     PIXFORMAT_RGB444,    // 3BP2P/RGB444
     PIXFORMAT_RGB555,    // 3BP2P/RGB555
 } pixformat_t;
-
-enum USBWebCamFrameSize {
-  USB_WEBCAM_SIZE_160X120,    // QQVGA
-  USB_WEBCAM_SIZE_176X144,    // QCIF
-  USB_WEBCAM_SIZE_240X176,    // HQVGA
-  USB_WEBCAM_SIZE_320X240,    // QVGA
-  USB_WEBCAM_SIZE_400X296,    // CIF
-  USB_WEBCAM_SIZE_640X480,    // VGA
-  USB_WEBCAM_SIZE_800X600,    // SVGA
-  USB_WEBCAM_SIZE_1024X768,   // XGA
-  USB_WEBCAM_SIZE_1280X1024,  // SXGA
-  USB_WEBCAM_SIZE_1600X1200,  // UXGA
-  USB_WEBCAM_SIZE_1920X1080,  // FHD
-  USB_WEBCAM_SIZE_720X1280,   // PHD
-  USB_WEBCAM_SIZE_864X1536,   // P3MP
-  USB_WEBCAM_SIZE_2048X1536,  // QXGA
-  USB_WEBCAM_SIZE_2560X1440,  // QHD
-  USB_WEBCAM_SIZE_2560X1600,  // WQXGA
-  USB_WEBCAM_SIZE_1080X1920,  // PFHD
-  USB_WEBCAM_SIZE_2560X1920,  // QSXGA
-};
 
 /* ---------------- CameraImage class ---------------- */
 typedef struct {
@@ -120,8 +101,6 @@ class USBWebCam : public camera::Camera {
   bool start_attempted_ = false;
 
   /* setters */
-  /* -- image */
-  void set_frame_size(USBWebCamFrameSize size);
   void set_drop_size(uint32_t drop_size);
   void set_frame_buffer_size(uint32_t frame_buffer_size);
   /* -- framerates */
@@ -133,6 +112,8 @@ class USBWebCam : public camera::Camera {
   bool is_controls_probed() const { return controls_probed_; }
   void set_pu_controls_bitmap(uint32_t bm) { pu_controls_bitmap_ = bm; }
   void set_stream_button(USBWebCamButton *b) { stream_button_ = b; }
+  void set_mode_select(USBWebCamSelect *s) { mode_select_ = s; }
+  void change_video_mode(uint16_t width, uint16_t height, uint16_t fps);
   bool is_streaming() const { return stream_requesters_ != 0; }
   void set_brightness_number(USBWebCamNumber *n) { brightness_number_ = n; }
   void set_contrast_number(USBWebCamNumber *n)   { contrast_number_ = n; }
@@ -158,6 +139,8 @@ class USBWebCam : public camera::Camera {
   void add_stream_start_callback(std::function<void()> &&callback);
   void add_stream_stop_callback(std::function<void()> &&callback);
 
+  ESPPreferenceObject mode_pref_;
+
  protected:
   /* internal methods */
   bool has_requested_image_() const;
@@ -166,8 +149,6 @@ class USBWebCam : public camera::Camera {
   static void camera_init_task(void *pv);
 
   /* attributes */
-  /* camera configuration */
-  USBWebCamFrameSize frame_size;
   uint32_t frame_buffer_size_{65536};
   volatile bool camera_init_done_{false};
   volatile bool controls_probed_{false};
@@ -175,9 +156,12 @@ class USBWebCam : public camera::Camera {
   /* -- framerates */
   uint32_t max_update_interval_{1000};
   uint32_t idle_update_interval_{15000};
+  uint16_t current_width_{0};
+  uint16_t current_height_{0};
   uint8_t processing_unit_id_{2};
   uint32_t pu_controls_bitmap_{0xFFFFFFFF};  // all supported until parsed
   USBWebCamButton *stream_button_{nullptr};
+  USBWebCamSelect *mode_select_{nullptr};
   USBWebCamNumber *brightness_number_{nullptr};
   USBWebCamNumber *contrast_number_{nullptr};
   USBWebCamNumber *saturation_number_{nullptr};

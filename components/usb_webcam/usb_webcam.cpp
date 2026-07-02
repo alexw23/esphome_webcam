@@ -3,6 +3,7 @@
 #ifdef USE_ESP32
 
 #include "usb_webcam.h"
+#include "usb_webcam_select.h"
 #include "esphome/components/camera/camera.h"
 #include "usb/uvc_host.h"
 #include "usb/usb_host.h"
@@ -18,6 +19,7 @@ extern "C" esp_err_t uvc_host_usb_ctrl(uvc_host_stream_hdl_t stream_hdl, uint8_t
 
 #include <freertos/event_groups.h>
 #include <freertos/task.h>
+#include <algorithm>
 
 
 static const char *const TAG = "usb_webcam";
@@ -29,6 +31,7 @@ static const char *const TAG = "usb_webcam";
 namespace esphome::usb_webcam {
 
 static uint32_t fetch_pu_bitmap(uint8_t unit_id);
+static std::vector<VideoMode> parse_uvc_formats();
 
 static uint32_t s_drop_frame_size = 0;
 static camera_fb_t s_fb;
@@ -53,31 +56,29 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
     ESP_LOGV(TAG, "frame_cb: frame=%p, data=%p, len=%zu, format=%d, h_res=%d, v_res=%d, fps=%.2f",
              frame, frame->data, frame->data_len, frame->vs_format.format,
              frame->vs_format.h_res, frame->vs_format.v_res, frame->vs_format.fps);
-            
+
     if (frame->vs_format.format != UVC_VS_FORMAT_MJPEG) return true;
 
     if (xSemaphoreTake(s_buffer_mutex, 0) == pdTRUE) {
-        
+
         // Only process if we have an empty slot available
         if (!s_free_buffers.empty()) {
             uint8_t *buf = s_free_buffers.front();
             s_free_buffers.pop();
             memcpy(buf, frame->data, frame->data_len);
 
-            // Use your wrapper structure here
-            camera_fb_t *fb = new camera_fb_t(); 
+            camera_fb_t *fb = new camera_fb_t();
             fb->buf = buf;
             fb->len = frame->data_len;
             fb->width = frame->vs_format.h_res;
             fb->height = frame->vs_format.v_res;
             fb->format = PIXFORMAT_JPEG;
-            
+
             s_ready_buffers.push(fb);
         }
-        
+
         xSemaphoreGive(s_buffer_mutex);
     } else {
-        // Mutex was busy, just return true to let the driver keep going
         ESP_LOGV(TAG, "Frame dropped: Mutex busy");
     }
     return true;
@@ -127,7 +128,7 @@ esp_err_t usb_host_drivers_install() {
               usb_host_device_free_all();
           }
       }
-  }, "usb_events", 4096, NULL, 15, NULL, tskNO_AFFINITY);  // core 0
+  }, "usb_events", 4096, NULL, 15, NULL, tskNO_AFFINITY);
 
   const uvc_host_driver_config_t uvc_driver_config = {
       .driver_task_stack_size = 8 * 1024,
@@ -143,32 +144,7 @@ esp_err_t usb_host_drivers_install() {
   return ESP_OK;
 }
 
-esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_buffer_size) {
-
-  uint16_t frame_width = 0;
-  uint16_t frame_height = 0;
-  switch (fs) {
-    case USB_WEBCAM_SIZE_160X120:   frame_width = 160;  frame_height = 120; break;
-    case USB_WEBCAM_SIZE_176X144:   frame_width = 176;  frame_height = 144; break;
-    case USB_WEBCAM_SIZE_240X176:   frame_width = 240;  frame_height = 176; break;
-    case USB_WEBCAM_SIZE_320X240:   frame_width = 320;  frame_height = 240; break;
-    case USB_WEBCAM_SIZE_400X296:   frame_width = 400;  frame_height = 296; break;
-    case USB_WEBCAM_SIZE_640X480:   frame_width = 640;  frame_height = 480; break;
-    case USB_WEBCAM_SIZE_800X600:   frame_width = 800;  frame_height = 600; break;
-    case USB_WEBCAM_SIZE_1024X768:  frame_width = 1024; frame_height = 768; break;
-    case USB_WEBCAM_SIZE_1280X1024: frame_width = 1280; frame_height = 1024; break;
-    case USB_WEBCAM_SIZE_1600X1200: frame_width = 1600; frame_height = 1200; break;
-    case USB_WEBCAM_SIZE_1920X1080: frame_width = 1920; frame_height = 1080; break;
-    case USB_WEBCAM_SIZE_720X1280:  frame_width = 720;  frame_height = 1280; break;
-    case USB_WEBCAM_SIZE_864X1536:  frame_width = 864;  frame_height = 1536; break;
-    case USB_WEBCAM_SIZE_2048X1536: frame_width = 2048; frame_height = 1536; break;
-    case USB_WEBCAM_SIZE_2560X1440: frame_width = 2560; frame_height = 1440; break;
-    case USB_WEBCAM_SIZE_2560X1600: frame_width = 2560; frame_height = 1600; break;
-    case USB_WEBCAM_SIZE_1080X1920: frame_width = 1080; frame_height = 1920; break;
-    case USB_WEBCAM_SIZE_2560X1920: frame_width = 2560; frame_height = 1920; break;
-    default: return ESP_ERR_INVALID_ARG;
-  }
-
+static esp_err_t open_stream(uint16_t frame_width, uint16_t frame_height, uint16_t fps, uint32_t frame_buffer_size) {
   uvc_host_stream_config_t stream_config = {
       .event_cb = stream_callback,
       .frame_cb = camera_frame_cb,
@@ -201,7 +177,7 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
       ret = uvc_host_stream_open(&stream_config, pdMS_TO_TICKS(10000), &stream_hdl);
       global_usb_webcam->last_open_ret_ = ret;
       if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "uvc_host_stream_open attempt %d failed: %s", attempt, esp_err_to_name(ret));
+          ESP_LOGW(TAG, "uvc_host_stream_open attempt %d failed: %s", attempt, esp_err_to_name(ret));
           vTaskDelay(pdMS_TO_TICKS(2000));
       }
   }
@@ -212,8 +188,6 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
   }
 
   global_usb_webcam->stream_opened_ = true;
-  global_usb_webcam->set_pu_controls_bitmap(fetch_pu_bitmap(global_usb_webcam->get_processing_unit_id()));
-  ESP_LOGI(TAG, "Stream opened, deferring start to main loop");
   return ESP_OK;
 }
 
@@ -221,11 +195,85 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
 void USBWebCam::camera_init_task(void *pv) {
   USBWebCam *self = static_cast<USBWebCam *>(pv);
 
-  // -- NEW: Sleep for 15 seconds so WiFi and Logger can connect --
   vTaskDelay(pdMS_TO_TICKS(10000));
 
-  ESP_LOGI(TAG, "Starting USB stream open");
-  self->init_error_ = esp_camera_init(self->frame_size, 1000 / self->max_update_interval_, self->frame_buffer_size_);
+  // Wait for USB device to enumerate (up to 15s)
+  ESP_LOGI(TAG, "Waiting for USB device to enumerate...");
+  uint8_t addr_list[8];
+  int num_dev = 0;
+  for (int i = 0; i < 150 && num_dev == 0; i++) {
+      usb_host_device_addr_list_fill(sizeof(addr_list), addr_list, &num_dev);
+      if (num_dev == 0) vTaskDelay(pdMS_TO_TICKS(100));
+  }
+  if (num_dev == 0) {
+      ESP_LOGE(TAG, "No USB device found after 15s");
+      self->init_error_ = ESP_ERR_NOT_FOUND;
+      self->camera_init_done_ = true;
+      vTaskDelete(NULL);
+      return;
+  }
+  ESP_LOGI(TAG, "USB device found, parsing video modes...");
+
+  // Parse available MJPEG modes from descriptor
+  auto modes = parse_uvc_formats();
+  if (modes.empty()) {
+      ESP_LOGE(TAG, "No MJPEG video modes found in descriptor");
+      self->init_error_ = ESP_ERR_NOT_FOUND;
+      self->camera_init_done_ = true;
+      vTaskDelete(NULL);
+      return;
+  }
+
+  // Sort ascending by pixel count, then fps
+  std::sort(modes.begin(), modes.end(), [](const VideoMode &a, const VideoMode &b) {
+      uint32_t pa = (uint32_t)a.width * a.height;
+      uint32_t pb = (uint32_t)b.width * b.height;
+      return pa != pb ? pa < pb : a.fps < b.fps;
+  });
+
+  // Populate select options
+  if (self->mode_select_) {
+      self->mode_select_->modes = modes;
+      std::vector<std::string> options;
+      for (auto &m : modes) {
+          char buf[32];
+          snprintf(buf, sizeof(buf), "%dx%d @ %dfps", m.width, m.height, m.fps);
+          options.push_back(buf);
+      }
+      self->mode_select_->traits.set_options(options);
+  }
+
+  // Pick mode: NVS preference or lowest res (modes[0])
+  VideoMode chosen = modes[0];
+  {
+      VideoMode saved{};
+      if (self->mode_pref_.load(&saved) && saved.width != 0) {
+          for (auto &m : modes) {
+              if (m.width == saved.width && m.height == saved.height && m.fps == saved.fps) {
+                  chosen = m;
+                  ESP_LOGI(TAG, "Restored saved mode %dx%d @ %dfps", chosen.width, chosen.height, chosen.fps);
+                  break;
+              }
+          }
+      }
+  }
+
+  ESP_LOGI(TAG, "Opening stream at %dx%d @ %dfps", chosen.width, chosen.height, chosen.fps);
+  self->init_error_ = open_stream(chosen.width, chosen.height, chosen.fps, self->frame_buffer_size_);
+
+  if (self->init_error_ == ESP_OK) {
+      self->current_width_  = chosen.width;
+      self->current_height_ = chosen.height;
+      self->max_update_interval_ = 1000 / chosen.fps;
+      self->set_pu_controls_bitmap(fetch_pu_bitmap(self->get_processing_unit_id()));
+
+      if (self->mode_select_) {
+          char buf[32];
+          snprintf(buf, sizeof(buf), "%dx%d @ %dfps", chosen.width, chosen.height, chosen.fps);
+          self->mode_select_->publish_state(buf);
+      }
+  }
+
   self->camera_init_done_ = true;
   vTaskDelete(NULL);
 }
@@ -234,17 +282,17 @@ void USBWebCam::setup() {
   global_usb_webcam = this;
   this->last_update_ = esp_timer_get_time();
 
+  mode_pref_ = global_preferences->make_preference<VideoMode>(fnv1_hash("usb_webcam_mode"));
+
   // Configure status LED
   gpio_reset_pin(GPIO_NUM_15);
   gpio_set_direction(GPIO_NUM_15, GPIO_MODE_OUTPUT);
 
-  // Enable verbose logging for UVC subsystem to diagnose enumeration issues
   esp_log_level_set("uvc", ESP_LOG_VERBOSE);
   esp_log_level_set("uvc-control", ESP_LOG_VERBOSE);
   esp_log_level_set("HCD DWC", ESP_LOG_VERBOSE);
   esp_log_level_set("USB HOST", ESP_LOG_VERBOSE);
 
-  // Install USB host and UVC driver early (before WiFi claims interrupt slots)
   esp_err_t err = usb_host_drivers_install();
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "USB driver install failed: %s", esp_err_to_name(err));
@@ -253,7 +301,6 @@ void USBWebCam::setup() {
     return;
   }
 
-  // Defer slow stream open (device enumeration) to background task
   xTaskCreatePinnedToCore(USBWebCam::camera_init_task, "cam_init", 4096, this, 5, NULL, 0);
 
   for (int i = 0; i < NUM_BUFFERS; i++) {
@@ -262,7 +309,7 @@ void USBWebCam::setup() {
       s_free_buffers.push(buf);
     }
   }
-  
+
   s_buffer_mutex = xSemaphoreCreateMutex();
 }
 
@@ -280,7 +327,7 @@ void USBWebCam::loop() {
           this->open_attempts_, esp_err_to_name(this->last_open_ret_), stream_hdl);
   }
   if (!this->camera_init_done_) return;
-  // Deferred stream start — runs once, after API is up, so errors are visible over WiFi
+  // Deferred stream start — runs once after init, so errors are visible over WiFi
   if (this->stream_opened_ && !this->start_attempted_) {
     this->start_attempted_ = true;
     ESP_LOGI(TAG, "Attempting uvc_host_stream_start now...");
@@ -314,7 +361,7 @@ void USBWebCam::loop() {
 
 void USBWebCam::dump_config() {
   ESP_LOGCONFIG(TAG, "USB WebCam:");
-  ESP_LOGCONFIG(TAG, "  Frame Size: %d", this->frame_size);
+  ESP_LOGCONFIG(TAG, "  Current Mode: %dx%d", this->current_width_, this->current_height_);
   ESP_LOGCONFIG(TAG, "  Frame Buffer Size: %" PRIu32, this->frame_buffer_size_);
   ESP_LOGCONFIG(TAG, "  Max Update Interval: %" PRIu32, this->max_update_interval_);
   ESP_LOGCONFIG(TAG, "  Idle Update Interval: %" PRIu32, this->idle_update_interval_);
@@ -331,8 +378,8 @@ void USBWebCam::start_stream(camera::CameraRequester requester) {
   uint8_t val = (1U << (uint32_t) requester);
   if (!this->stream_requesters_) {
     this->stream_start_callback_.call();
-    ESP_LOGD(TAG, "start_stream! %d", this->stream_requesters_); 
-  }  
+    ESP_LOGD(TAG, "start_stream! %d", this->stream_requesters_);
+  }
 
   this->stream_requesters_ |= val;
 }
@@ -394,11 +441,9 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
 
   if (fb == nullptr) {
     ESP_LOGV(TAG, "No frame ready yet");
-    // Don't update last_update_ here if we just missed a frame
     return;
   }
 
-  // Process the frame
   std::shared_ptr<USBWebCamImage> image = std::make_shared<USBWebCamImage>(fb, this->single_requesters_);
 
   for (auto *listener : this->listeners_) {
@@ -408,6 +453,42 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
   this->current_image_ = image;
   this->single_requesters_ = 0;
   this->last_update_ = now;
+}
+
+void USBWebCam::change_video_mode(uint16_t width, uint16_t height, uint16_t fps) {
+    struct Args { USBWebCam *self; uint16_t width, height, fps; };
+    auto *args = new Args{this, width, height, fps};
+    xTaskCreate([](void *arg) {
+        auto *a = static_cast<Args *>(arg);
+        ESP_LOGI(TAG, "Changing mode to %dx%d @ %dfps", a->width, a->height, a->fps);
+
+        if (stream_hdl) {
+            uvc_host_stream_stop(stream_hdl);
+            uvc_host_stream_close(stream_hdl);
+            stream_hdl = NULL;
+        }
+
+        esp_err_t ret = open_stream(a->width, a->height, a->fps, a->self->frame_buffer_size_);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to reopen stream: %s", esp_err_to_name(ret));
+        } else {
+            a->self->current_width_  = a->width;
+            a->self->current_height_ = a->height;
+            a->self->max_update_interval_ = 1000 / a->fps;
+
+            VideoMode vm{a->width, a->height, a->fps};
+            a->self->mode_pref_.save(&vm);
+
+            ret = uvc_host_stream_start(stream_hdl);
+            if (ret == ESP_OK) {
+                a->self->update_camera_parameters();
+            } else {
+                ESP_LOGE(TAG, "stream_start failed after mode change: %s", esp_err_to_name(ret));
+            }
+        }
+        delete a;
+        vTaskDelete(NULL);
+    }, "cam_mode", 4096, args, 3, NULL);
 }
 
 // UVC 1.1 Table A-14: selector → bmControls bit position
@@ -489,6 +570,90 @@ static uint32_t fetch_pu_bitmap(uint8_t unit_id) {
     return bitmap;
 }
 
+// Walk the USB config descriptor collecting all VS_FRAME_MJPEG entries (subtype 0x07).
+// Returns a list of {width, height, fps} for every advertised MJPEG mode.
+static std::vector<VideoMode> parse_uvc_formats() {
+    std::vector<VideoMode> modes;
+
+    usb_host_client_handle_t temp_client;
+    const usb_host_client_config_t cfg = {
+        .is_synchronous = false,
+        .max_num_event_msg = 1,
+        .async = {
+            .client_event_callback = [](const usb_host_client_event_msg_t *, void *) {},
+            .callback_arg = nullptr,
+        },
+    };
+    if (usb_host_client_register(&cfg, &temp_client) != ESP_OK) {
+        ESP_LOGW(TAG, "Could not register temp USB client for format parse");
+        return modes;
+    }
+
+    uint8_t addr_list[8];
+    int num_dev = 0;
+    usb_host_device_addr_list_fill(sizeof(addr_list), addr_list, &num_dev);
+
+    for (int i = 0; i < num_dev; i++) {
+        usb_device_handle_t dev;
+        if (usb_host_device_open(temp_client, addr_list[i], &dev) != ESP_OK) continue;
+
+        const usb_config_desc_t *cfg_desc;
+        if (usb_host_get_active_config_descriptor(dev, &cfg_desc) == ESP_OK) {
+            const uint8_t *p   = (const uint8_t *)cfg_desc;
+            const uint8_t *end = p + cfg_desc->wTotalLength;
+
+            while (p + 2 <= end) {
+                uint8_t len  = p[0];
+                uint8_t type = p[1];
+                if (len < 2 || p + len > end) break;
+
+                // CS_INTERFACE = 0x24, VS_FRAME_MJPEG subtype = 0x07
+                // Fixed header is 26 bytes, then frame intervals follow
+                if (type == 0x24 && p[2] == 0x07 && len >= 27) {
+                    uint16_t w = (uint16_t)(p[5] | (p[6] << 8));
+                    uint16_t h = (uint16_t)(p[7] | (p[8] << 8));
+                    uint8_t  interval_type = p[25];  // 0=continuous, N=discrete count
+
+                    if (interval_type == 0) {
+                        // Continuous: [26..29]=min, [30..33]=max, [34..37]=step (100ns units)
+                        if (len >= 38) {
+                            uint32_t t_min = p[26] | ((uint32_t)p[27] << 8) | ((uint32_t)p[28] << 16) | ((uint32_t)p[29] << 24);
+                            uint32_t t_max = p[30] | ((uint32_t)p[31] << 8) | ((uint32_t)p[32] << 16) | ((uint32_t)p[33] << 24);
+                            // Emit common fps values that fall within [min, max]
+                            static const uint16_t common_fps[] = {5, 10, 15, 20, 25, 30, 60};
+                            for (uint16_t fps : common_fps) {
+                                uint32_t t = 10000000u / fps;
+                                if (t >= t_min && t <= t_max) {
+                                    modes.push_back({w, h, fps});
+                                }
+                            }
+                        }
+                    } else {
+                        // Discrete: N intervals of 4 bytes each starting at p[26]
+                        for (uint8_t n = 0; n < interval_type; n++) {
+                            uint8_t off = 26 + n * 4;
+                            if (off + 4 > len) break;
+                            uint32_t t = p[off] | ((uint32_t)p[off+1] << 8) | ((uint32_t)p[off+2] << 16) | ((uint32_t)p[off+3] << 24);
+                            if (t == 0) continue;
+                            uint16_t fps = (uint16_t)((10000000u + t / 2) / t);
+                            if (fps > 0) {
+                                modes.push_back({w, h, fps});
+                                ESP_LOGD(TAG, "Found mode %dx%d @ %dfps (interval=%" PRIu32 ")", w, h, fps, t);
+                            }
+                        }
+                    }
+                }
+                p += len;
+            }
+        }
+        usb_host_device_close(temp_client, dev);
+    }
+
+    usb_host_client_deregister(temp_client);
+    ESP_LOGI(TAG, "Found %d MJPEG video modes", (int)modes.size());
+    return modes;
+}
+
 static esp_err_t pu_req(uvc_host_stream_hdl_t hdl, uint8_t unit_id, uint8_t selector, uint8_t bRequest, int16_t *out) {
     uint8_t data[2] = {0};
     uint8_t bmRequestType = (bRequest == 0x01) ? 0x21 : 0xA1;
@@ -536,7 +701,6 @@ void USBWebCam::update_camera_parameters() {
         } else {
             ESP_LOGI(TAG, "Control '%s': current=%d (range unavailable)", ctrl.name, current);
         }
-        // Restore saved value if present, otherwise publish camera's current value
         float restored;
         if (ctrl.number->pref_.load(&restored) && restored >= min_val && restored <= max_val) {
             ESP_LOGI(TAG, "Restoring '%s' = %.0f", ctrl.name, restored);
@@ -571,6 +735,19 @@ void USBWebCamNumber::control(float value) {
     }
 }
 
+void USBWebCamSelect::control(const std::string &value) {
+    for (auto &m : modes) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%dx%d @ %dfps", m.width, m.height, m.fps);
+        if (value == buf) {
+            publish_state(value);
+            if (parent_) parent_->change_video_mode(m.width, m.height, m.fps);
+            return;
+        }
+    }
+    ESP_LOGW(TAG, "Unknown video mode selected: %s", value.c_str());
+}
+
 void USBWebCamButton::press_action() {
     if (stream_hdl == NULL) return;
     xTaskCreate([](void *) {
@@ -602,7 +779,6 @@ bool USBWebCam::can_return_image_() const { return this->current_image_.use_coun
 
 /* ---------------- setters ---------------- */
 
-void USBWebCam::set_frame_size(USBWebCamFrameSize size) { this->frame_size = size; }
 void USBWebCam::set_drop_size(uint32_t drop_size) { s_drop_frame_size = drop_size; }
 void USBWebCam::set_frame_buffer_size(uint32_t frame_buffer_size) { this->frame_buffer_size_ = frame_buffer_size; }
 void USBWebCam::set_max_update_interval(uint32_t max_update_interval) {
@@ -654,7 +830,7 @@ uint8_t *USBWebCamImageReader::peek_data_buffer() {
 void USBWebCamImageReader::consume_data(size_t consumed) { this->offset_ += consumed; }
 void USBWebCamImageReader::return_image() {
     if (!this->image_) return;
-    this->image_.reset();  // destructor fires when last ref drops
+    this->image_.reset();
 }
 
 }  // namespace esphome::usb_webcam
