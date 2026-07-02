@@ -457,64 +457,36 @@ void USBWebCam::update_camera_parameters() {
 
 void USBWebCamNumber::control(float value) {
     if (stream_hdl == NULL || global_usb_webcam == nullptr) return;
+    if (!global_usb_webcam->controls_probed_) {
+        ESP_LOGW(TAG, "Controls not yet probed, ignoring");
+        return;
+    }
     int16_t min_v = (int16_t)traits.get_min_value();
     int16_t max_v = (int16_t)traits.get_max_value();
     if (value < min_v || value > max_v) {
         ESP_LOGE(TAG, "Value %.0f out of range [%d, %d]", value, min_v, max_v);
         return;
     }
-    global_usb_webcam->queue_control_change(selector_, (int16_t)value);
-    publish_state(value);
+    esp_err_t err = pu_set(stream_hdl, global_usb_webcam->get_processing_unit_id(), selector_, (int16_t)value);
+    if (err == ESP_OK) {
+        publish_state(value);
+    } else {
+        ESP_LOGW(TAG, "Failed to set control 0x%02x: %s", selector_, esp_err_to_name(err));
+    }
 }
 
-void USBWebCam::queue_control_change(uint8_t selector, int16_t value) {
-    if (!controls_probed_) {
-        ESP_LOGW(TAG, "Controls not yet probed, ignoring change for selector 0x%02x", selector);
-        return;
-    }
-    ESP_LOGD(TAG, "Queuing control 0x%02x = %d", selector, value);
-    for (auto &pc : pending_controls_) {
-        if (!pc.pending || pc.selector == selector) {
-            pc.selector = selector;
-            pc.value = value;
-            pc.pending = true;
-            break;
-        }
-    }
-    if (apply_timer_ == nullptr) {
-        apply_timer_ = xTimerCreate("ctrl_apply", pdMS_TO_TICKS(500), pdFALSE, this, apply_timer_cb);
-    }
-    xTimerReset(apply_timer_, portMAX_DELAY);
-}
-
-void USBWebCam::apply_timer_cb(TimerHandle_t timer) {
-    xTaskCreate(apply_controls_task, "ctrl_set", 4096, pvTimerGetTimerID(timer), 3, NULL);
-}
-
-void USBWebCam::apply_controls_task(void *arg) {
-    USBWebCam *self = static_cast<USBWebCam *>(arg);
-    if (stream_hdl == NULL) { vTaskDelete(NULL); return; }
-
-    ESP_LOGI(TAG, "Applying camera controls (stop/set/start)");
-    esp_err_t stop_err = uvc_host_stream_stop(stream_hdl);
-    if (stop_err != ESP_OK) {
-        ESP_LOGW(TAG, "stream_stop returned %s, proceeding anyway", esp_err_to_name(stop_err));
-    }
-    vTaskDelay(pdMS_TO_TICKS(100));  // let control endpoint settle
-
-    for (auto &pc : self->pending_controls_) {
-        if (!pc.pending) continue;
-        esp_err_t err = pu_set(stream_hdl, self->processing_unit_id_, pc.selector, pc.value);
-        if (err == ESP_OK) {
-            ESP_LOGI(TAG, "Applied control 0x%02x = %d", pc.selector, (int)pc.value);
+void USBWebCamButton::press_action() {
+    if (stream_hdl == NULL) return;
+    xTaskCreate([](void *) {
+        if (global_usb_webcam->is_streaming()) {
+            ESP_LOGI(TAG, "Button: stopping stream");
+            uvc_host_stream_stop(stream_hdl);
         } else {
-            ESP_LOGW(TAG, "Failed to set control 0x%02x: %s", pc.selector, esp_err_to_name(err));
+            ESP_LOGI(TAG, "Button: starting stream");
+            uvc_host_stream_start(stream_hdl);
         }
-        pc.pending = false;
-    }
-
-    uvc_host_stream_start(stream_hdl);
-    vTaskDelete(NULL);
+        vTaskDelete(NULL);
+    }, "cam_btn", 4096, nullptr, 3, NULL);
 }
 
 void USBWebCam::add_stream_start_callback(std::function<void()> &&callback) {
@@ -544,9 +516,7 @@ void USBWebCam::set_idle_update_interval(uint32_t idle_update_interval) {
   this->idle_update_interval_ = idle_update_interval;
 }
 
-USBWebCam::USBWebCam() {
-    memset(pending_controls_, 0, sizeof(pending_controls_));
-}
+USBWebCam::USBWebCam() {}
 
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)

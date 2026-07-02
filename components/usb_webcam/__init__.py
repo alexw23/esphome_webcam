@@ -19,7 +19,7 @@ from esphome.const import (
 from esphome.core import CORE, TimePeriod, ID
 from esphome.components.esp32 import add_idf_sdkconfig_option
 from esphome.components.esp32 import add_idf_component
-from esphome.components import number
+from esphome.components import number, button
 try:
   from esphome.cpp_helpers import setup_entity
 except:
@@ -27,11 +27,12 @@ except:
 
 DEPENDENCIES = ["esp32", "camera"]
 
-AUTO_LOAD = ["camera", "psram", "number"]
+AUTO_LOAD = ["camera", "psram", "number", "button"]
 
 usb_webcam_ns = cg.esphome_ns.namespace("usb_webcam")
 USBWebCam = usb_webcam_ns.class_("USBWebCam", cg.PollingComponent, cg.EntityBase)
 USBWebCamNumber = usb_webcam_ns.class_("USBWebCamNumber", number.Number)
+USBWebCamButton = usb_webcam_ns.class_("USBWebCamButton", button.Button)
 USBWebCamStreamStartTrigger = usb_webcam_ns.class_(
     "USBWebCamStreamStartTrigger",
     automation.Trigger.template(),
@@ -177,6 +178,17 @@ async def to_code(config):
             step=1,
         )
         cg.add(getattr(var, setter)(num_var))
+
+    btn_id = ID(f"{parent_id}_stream_toggle", is_declaration=True, type=USBWebCamButton)
+    btn_var = cg.new_Pvariable(btn_id)
+    await button.register_button(btn_var, {
+        CONF_ID: btn_id,
+        CONF_NAME: "Stream Toggle",
+        CONF_DISABLED_BY_DEFAULT: False,
+        CONF_ICON: "mdi:camera",
+        CONF_ENTITY_CATEGORY: "",
+    })
+    cg.add(var.set_stream_button(btn_var))
 
     cg.add_define("USE_USB_WEBCAM")
 
