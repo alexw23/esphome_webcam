@@ -10,6 +10,7 @@
 #include "esphome/core/component.h"
 #include "esphome/components/camera/camera.h"
 #include "esphome/core/helpers.h"
+#include "usb_webcam_number.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <vector>
@@ -126,12 +127,13 @@ class USBWebCam : public camera::Camera {
   void set_max_update_interval(uint32_t max_update_interval);
   void set_idle_update_interval(uint32_t idle_update_interval);
   /* -- camera controls */
-  void set_brightness(int16_t v) { brightness_ = v; }
-  void set_contrast(int16_t v)   { contrast_ = v; }
-  void set_saturation(int16_t v) { saturation_ = v; }
-  void set_hue(int16_t v)        { hue_ = v; }
-  void set_sharpness(int16_t v)  { sharpness_ = v; }
   void set_processing_unit_id(uint8_t id) { processing_unit_id_ = id; }
+  uint8_t get_processing_unit_id() const { return processing_unit_id_; }
+  void set_brightness_number(USBWebCamNumber *n) { brightness_number_ = n; }
+  void set_contrast_number(USBWebCamNumber *n)   { contrast_number_ = n; }
+  void set_saturation_number(USBWebCamNumber *n) { saturation_number_ = n; }
+  void set_hue_number(USBWebCamNumber *n)        { hue_number_ = n; }
+  void set_sharpness_number(USBWebCamNumber *n)  { sharpness_number_ = n; }
 
   /* public API (derivated) */
   void setup() override;
@@ -167,13 +169,12 @@ class USBWebCam : public camera::Camera {
   /* -- framerates */
   uint32_t max_update_interval_{1000};
   uint32_t idle_update_interval_{15000};
-  /* -- camera controls (INT32_MIN = not configured) */
-  int32_t brightness_{INT32_MIN};
-  int32_t contrast_{INT32_MIN};
-  int32_t saturation_{INT32_MIN};
-  int32_t hue_{INT32_MIN};
-  int32_t sharpness_{INT32_MIN};
   uint8_t processing_unit_id_{2};
+  USBWebCamNumber *brightness_number_{nullptr};
+  USBWebCamNumber *contrast_number_{nullptr};
+  USBWebCamNumber *saturation_number_{nullptr};
+  USBWebCamNumber *hue_number_{nullptr};
+  USBWebCamNumber *sharpness_number_{nullptr};
 
   esp_err_t init_error_{ESP_OK};
   std::shared_ptr<USBWebCamImage> current_image_;

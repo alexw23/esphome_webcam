@@ -423,39 +423,45 @@ static esp_err_t pu_set(uvc_host_stream_hdl_t hdl, uint8_t unit_id, uint8_t sele
 void USBWebCam::update_camera_parameters() {
     if (stream_hdl == NULL) return;
 
-    struct { uint8_t selector; const char *name; int32_t value; } controls[] = {
-        {0x02, "brightness", brightness_},
-        {0x03, "contrast",   contrast_},
-        {0x07, "saturation", saturation_},
-        {0x06, "hue",        hue_},
-        {0x08, "sharpness",  sharpness_},
+    struct { uint8_t selector; const char *name; USBWebCamNumber *number; } controls[] = {
+        {0x02, "brightness", brightness_number_},
+        {0x03, "contrast",   contrast_number_},
+        {0x07, "saturation", saturation_number_},
+        {0x06, "hue",        hue_number_},
+        {0x08, "sharpness",  sharpness_number_},
     };
 
     for (auto &ctrl : controls) {
+        if (!ctrl.number) continue;
         int16_t current, min_val, max_val;
-        // GET_CUR=0x81, GET_MIN=0x82, GET_MAX=0x83
         if (pu_req(stream_hdl, processing_unit_id_, ctrl.selector, 0x81, &current) != ESP_OK) {
             ESP_LOGD(TAG, "Control '%s' not supported (PU=%d)", ctrl.name, processing_unit_id_);
+            ctrl.number->publish_state(NAN);  // mark unavailable
             continue;
         }
         bool has_range = (pu_req(stream_hdl, processing_unit_id_, ctrl.selector, 0x82, &min_val) == ESP_OK &&
                           pu_req(stream_hdl, processing_unit_id_, ctrl.selector, 0x83, &max_val) == ESP_OK);
         if (has_range) {
             ESP_LOGI(TAG, "Control '%s': current=%d, min=%d, max=%d", ctrl.name, current, min_val, max_val);
+            ctrl.number->traits.set_min_value(min_val);
+            ctrl.number->traits.set_max_value(max_val);
         } else {
             ESP_LOGI(TAG, "Control '%s': current=%d (range unavailable)", ctrl.name, current);
         }
-        if (ctrl.value == INT32_MIN) continue;
-        if (has_range && ((int16_t)ctrl.value < min_val || (int16_t)ctrl.value > max_val)) {
-            ESP_LOGE(TAG, "Cannot set '%s'=%d: out of range [%d, %d]", ctrl.name, (int)ctrl.value, min_val, max_val);
-            continue;
-        }
-        esp_err_t err = pu_set(stream_hdl, processing_unit_id_, ctrl.selector, (int16_t)ctrl.value);
-        if (err != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to set '%s'=%d: %s", ctrl.name, (int)ctrl.value, esp_err_to_name(err));
-        } else {
-            ESP_LOGI(TAG, "Set '%s' = %d", ctrl.name, (int)ctrl.value);
-        }
+        ctrl.number->publish_state(current);
+    }
+}
+
+void USBWebCamNumber::control(float value) {
+    if (stream_hdl == NULL) return;
+    int16_t min_v = (int16_t)traits.get_min_value();
+    int16_t max_v = (int16_t)traits.get_max_value();
+    if (value < min_v || value > max_v) {
+        ESP_LOGE(TAG, "Value %.0f out of range [%d, %d]", value, min_v, max_v);
+        return;
+    }
+    if (pu_set(stream_hdl, global_usb_webcam->get_processing_unit_id(), selector_, (int16_t)value) == ESP_OK) {
+        publish_state(value);
     }
 }
 

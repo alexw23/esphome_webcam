@@ -11,9 +11,10 @@ from esphome.const import (
     CONF_RESOLUTION,
     CONF_TRIGGER_ID,
 )
-from esphome.core import CORE, TimePeriod
+from esphome.core import CORE, TimePeriod, ID
 from esphome.components.esp32 import add_idf_sdkconfig_option
 from esphome.components.esp32 import add_idf_component
+from esphome.components import number
 try:
   from esphome.cpp_helpers import setup_entity
 except:
@@ -21,10 +22,11 @@ except:
 
 DEPENDENCIES = ["esp32", "camera"]
 
-AUTO_LOAD = ["camera", "psram"]
+AUTO_LOAD = ["camera", "psram", "number"]
 
 usb_webcam_ns = cg.esphome_ns.namespace("usb_webcam")
 USBWebCam = usb_webcam_ns.class_("USBWebCam", cg.PollingComponent, cg.EntityBase)
+USBWebCamNumber = usb_webcam_ns.class_("USBWebCamNumber", number.Number, cg.Component)
 USBWebCamStreamStartTrigger = usb_webcam_ns.class_(
     "USBWebCamStreamStartTrigger",
     automation.Trigger.template(),
@@ -79,12 +81,6 @@ CONF_IDLE_FRAMERATE = "idle_framerate"
 CONF_DROP_FRAME_SIZE = "drop_frame_size"
 CONF_FRAME_BUFFER_SIZE = "frame_buffer_size"
 
-# camera controls
-CONF_BRIGHTNESS = "brightness"
-CONF_CONTRAST = "contrast"
-CONF_SATURATION = "saturation"
-CONF_HUE = "hue"
-CONF_SHARPNESS = "sharpness"
 CONF_PROCESSING_UNIT_ID = "processing_unit_id"
 
 # stream trigger
@@ -111,12 +107,6 @@ CONFIG_SCHEMA = cv.ENTITY_BASE_SCHEMA.extend(
         cv.Optional(CONF_FRAME_BUFFER_SIZE, default="65536"): cv.All(
             cv.int_range(min=10240, max=524288)
         ),
-        # camera controls (optional; omit to leave at device default)
-        cv.Optional(CONF_BRIGHTNESS): cv.int_range(min=-32768, max=32767),
-        cv.Optional(CONF_CONTRAST): cv.int_range(min=-32768, max=32767),
-        cv.Optional(CONF_SATURATION): cv.int_range(min=-32768, max=32767),
-        cv.Optional(CONF_HUE): cv.int_range(min=-32768, max=32767),
-        cv.Optional(CONF_SHARPNESS): cv.int_range(min=-32768, max=32767),
         cv.Optional(CONF_PROCESSING_UNIT_ID, default=2): cv.int_range(min=1, max=255),
         cv.Optional(CONF_ON_STREAM_START): automation.validate_automation(
             {
@@ -155,15 +145,25 @@ async def to_code(config):
     cg.add(var.set_frame_buffer_size(config[CONF_FRAME_BUFFER_SIZE]))
     cg.add(var.set_frame_size(config[CONF_RESOLUTION]))
     cg.add(var.set_processing_unit_id(config[CONF_PROCESSING_UNIT_ID]))
-    for conf_key, setter in [
-        (CONF_BRIGHTNESS, "set_brightness"),
-        (CONF_CONTRAST,   "set_contrast"),
-        (CONF_SATURATION, "set_saturation"),
-        (CONF_HUE,        "set_hue"),
-        (CONF_SHARPNESS,  "set_sharpness"),
+
+    parent_id = config[CONF_ID].id
+    for ctrl_name, setter in [
+        ("brightness", "set_brightness_number"),
+        ("contrast",   "set_contrast_number"),
+        ("saturation", "set_saturation_number"),
+        ("hue",        "set_hue_number"),
+        ("sharpness",  "set_sharpness_number"),
     ]:
-        if conf_key in config:
-            cg.add(getattr(var, setter)(config[conf_key]))
+        num_id = ID(f"{parent_id}_{ctrl_name}", is_declaration=True, type=USBWebCamNumber)
+        num_var = cg.new_Pvariable(num_id)
+        cg.add(num_var.set_name(ctrl_name.capitalize()))
+        cg.add(num_var.set_object_id(f"{parent_id}_{ctrl_name}"))
+        cg.add(num_var.traits.set_min_value(-32768))
+        cg.add(num_var.traits.set_max_value(32767))
+        cg.add(num_var.traits.set_step(1))
+        await cg.register_component(num_var, {})
+        cg.add(cg.App.register_number(num_var))
+        cg.add(getattr(var, setter)(num_var))
 
     cg.add_define("USE_USB_WEBCAM")
 
