@@ -175,6 +175,7 @@ class USBWebCam : public camera::Camera {
   uint32_t max_update_interval_{1000};
   uint32_t idle_update_interval_{15000};
   uint8_t processing_unit_id_{2};
+  uint32_t pu_controls_bitmap_{0xFFFFFFFF};  // all supported until parsed
   USBWebCamButton *stream_button_{nullptr};
   USBWebCamNumber *brightness_number_{nullptr};
   USBWebCamNumber *contrast_number_{nullptr};

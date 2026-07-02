@@ -210,7 +210,7 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
   }
 
   global_usb_webcam->stream_opened_ = true;
-  uvc_host_desc_print(stream_hdl);
+  global_usb_webcam->pu_controls_bitmap_ = fetch_pu_bitmap(global_usb_webcam->processing_unit_id_);
   ESP_LOGI(TAG, "Stream opened, deferring start to main loop");
   return ESP_OK;
 }
@@ -408,6 +408,85 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
   this->last_update_ = now;
 }
 
+// UVC 1.1 Table A-14: selector → bmControls bit position
+static int pu_selector_to_bit(uint8_t selector) {
+    static const int8_t map[] = {
+        -1,  // 0x00
+         8,  // 0x01 Backlight Compensation
+         0,  // 0x02 Brightness
+         1,  // 0x03 Contrast
+         9,  // 0x04 Gain
+        10,  // 0x05 Power Line Frequency
+         2,  // 0x06 Hue
+         3,  // 0x07 Saturation
+         4,  // 0x08 Sharpness
+         5,  // 0x09 Gamma
+         6,  // 0x0A White Balance Temperature
+         7,  // 0x0B White Balance Component
+    };
+    if (selector >= sizeof(map)) return -1;
+    return map[selector];
+}
+
+static bool pu_supported(uint32_t bitmap, uint8_t selector) {
+    int bit = pu_selector_to_bit(selector);
+    return (bit >= 0) && ((bitmap >> bit) & 1);
+}
+
+// Walk the USB config descriptor to find the Processing Unit with the given bUnitID
+// and return its bmControls packed into a uint32_t.
+static uint32_t fetch_pu_bitmap(uint8_t unit_id) {
+    usb_host_client_handle_t temp_client;
+    const usb_host_client_config_t cfg = {
+        .is_synchronous = false,
+        .max_num_event_msg = 1,
+        .async = {
+            .client_event_callback = [](const usb_host_client_event_msg_t *, void *) {},
+            .callback_arg = nullptr,
+        },
+    };
+    if (usb_host_client_register(&cfg, &temp_client) != ESP_OK) {
+        ESP_LOGW(TAG, "Could not register temp USB client for descriptor parse");
+        return 0xFFFFFFFF;
+    }
+
+    uint8_t addr_list[8];
+    int num_dev = 0;
+    uint32_t bitmap = 0xFFFFFFFF;
+
+    usb_host_device_addr_list_fill(sizeof(addr_list), addr_list, &num_dev);
+    for (int i = 0; i < num_dev && bitmap == 0xFFFFFFFF; i++) {
+        usb_device_handle_t dev;
+        if (usb_host_device_open(temp_client, addr_list[i], &dev) != ESP_OK) continue;
+
+        const usb_config_desc_t *cfg_desc;
+        if (usb_host_get_active_config_descriptor(dev, &cfg_desc) == ESP_OK) {
+            const uint8_t *p   = (const uint8_t *)cfg_desc;
+            const uint8_t *end = p + cfg_desc->wTotalLength;
+            while (p + 2 <= end) {
+                uint8_t len  = p[0];
+                uint8_t type = p[1];
+                if (len < 2 || p + len > end) break;
+                // CS_INTERFACE = 0x24, PU subtype = 0x05
+                if (type == 0x24 && len >= 9 && p[2] == 0x05 && p[3] == unit_id) {
+                    uint8_t ctrl_size = p[7];
+                    uint32_t bm = 0;
+                    for (uint8_t b = 0; b < ctrl_size && b < 4; b++)
+                        bm |= (uint32_t)p[8 + b] << (b * 8);
+                    bitmap = bm;
+                    ESP_LOGI(TAG, "PU unit=%d bmControls=0x%08" PRIx32, unit_id, bm);
+                    break;
+                }
+                p += len;
+            }
+        }
+        usb_host_device_close(temp_client, dev);
+    }
+
+    usb_host_client_deregister(temp_client);
+    return bitmap;
+}
+
 static esp_err_t pu_req(uvc_host_stream_hdl_t hdl, uint8_t unit_id, uint8_t selector, uint8_t bRequest, int16_t *out) {
     uint8_t data[2] = {0};
     uint8_t bmRequestType = (bRequest == 0x01) ? 0x21 : 0xA1;
@@ -435,10 +514,15 @@ void USBWebCam::update_camera_parameters() {
     global_usb_webcam->controls_probed_ = false;
     for (auto &ctrl : controls) {
         if (!ctrl.number) continue;
+        if (!pu_supported(pu_controls_bitmap_, ctrl.selector)) {
+            ESP_LOGD(TAG, "Control '%s' not in PU bmControls, skipping", ctrl.name);
+            ctrl.number->publish_state(NAN);
+            continue;
+        }
         int16_t current, min_val, max_val;
         if (pu_req(stream_hdl, processing_unit_id_, ctrl.selector, 0x81, &current) != ESP_OK) {
-            ESP_LOGD(TAG, "Control '%s' not supported (PU=%d)", ctrl.name, processing_unit_id_);
-            ctrl.number->publish_state(NAN);  // mark unavailable
+            ESP_LOGW(TAG, "Control '%s' GET_CUR failed unexpectedly", ctrl.name);
+            ctrl.number->publish_state(NAN);
             continue;
         }
         bool has_range = (pu_req(stream_hdl, processing_unit_id_, ctrl.selector, 0x82, &min_val) == ESP_OK &&
