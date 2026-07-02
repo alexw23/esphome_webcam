@@ -11,6 +11,7 @@ from esphome.const import (
     CONF_FREQUENCY,
     CONF_ICON,
     CONF_ID,
+    CONF_MODE,
     CONF_NAME,
     CONF_RESOLUTION,
     CONF_TRIGGER_ID,
