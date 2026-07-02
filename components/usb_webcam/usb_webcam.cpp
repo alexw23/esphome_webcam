@@ -6,7 +6,8 @@
 #include "esphome/components/camera/camera.h"
 #include "usb/uvc_host.h"
 #include "usb/usb_host.h"
-#include "esp_private/uvc_control.h"
+// forward-declare the private UVC control transfer API
+extern "C" esp_err_t uvc_host_usb_ctrl(uvc_host_stream_hdl_t stream_hdl, uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint16_t wLength, uint8_t *data);
 #include "esp_timer.h"
 #ifdef CONFIG_ESP32_S3_USB_OTG
 #include "bsp/esp-bsp.h"
@@ -405,14 +406,16 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
 
 static esp_err_t pu_get(uvc_host_stream_hdl_t hdl, uint8_t unit_id, uint8_t selector, int16_t *out) {
     uint8_t data[2] = {0};
-    esp_err_t err = uvc_host_usb_ctrl(hdl, 0xA1, UVC_GET_CUR, (uint16_t)(selector << 8), (uint16_t)(unit_id << 8), 2, data);
+    // bmRequestType=0xA1: device-to-host, class, interface; bRequest=GET_CUR=0x81
+    esp_err_t err = uvc_host_usb_ctrl(hdl, 0xA1, 0x81, (uint16_t)(selector << 8), (uint16_t)(unit_id << 8), 2, data);
     if (err == ESP_OK) *out = (int16_t)(data[0] | (data[1] << 8));
     return err;
 }
 
 static esp_err_t pu_set(uvc_host_stream_hdl_t hdl, uint8_t unit_id, uint8_t selector, int16_t value) {
     uint8_t data[2] = {(uint8_t)(value & 0xFF), (uint8_t)((value >> 8) & 0xFF)};
-    return uvc_host_usb_ctrl(hdl, 0x21, UVC_SET_CUR, (uint16_t)(selector << 8), (uint16_t)(unit_id << 8), 2, data);
+    // bmRequestType=0x21: host-to-device, class, interface; bRequest=SET_CUR=0x01
+    return uvc_host_usb_ctrl(hdl, 0x21, 0x01, (uint16_t)(selector << 8), (uint16_t)(unit_id << 8), 2, data);
 }
 
 void USBWebCam::update_camera_parameters() {
