@@ -130,6 +130,7 @@ class USBWebCam : public camera::Camera {
   /* -- camera controls */
   void set_processing_unit_id(uint8_t id) { processing_unit_id_ = id; }
   uint8_t get_processing_unit_id() const { return processing_unit_id_; }
+  bool is_controls_probed() const { return controls_probed_; }
   void set_stream_button(USBWebCamButton *b) { stream_button_ = b; }
   bool is_streaming() const { return stream_requesters_ != 0; }
   void set_brightness_number(USBWebCamNumber *n) { brightness_number_ = n; }

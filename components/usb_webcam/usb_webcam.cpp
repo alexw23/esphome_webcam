@@ -457,7 +457,7 @@ void USBWebCam::update_camera_parameters() {
 
 void USBWebCamNumber::control(float value) {
     if (stream_hdl == NULL || global_usb_webcam == nullptr) return;
-    if (!global_usb_webcam->controls_probed_) {
+    if (!global_usb_webcam->is_controls_probed()) {
         ESP_LOGW(TAG, "Controls not yet probed, ignoring");
         return;
     }
