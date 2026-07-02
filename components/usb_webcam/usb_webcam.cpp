@@ -352,15 +352,14 @@ void USBWebCam::loop() {
   }
   // Apply mode select options and initial state on the main thread (thread-safe)
   if (this->mode_select_ && !this->pending_mode_label_.empty() && !this->mode_select_->mode_labels.empty()) {
-      // Build c_str() pointer array on the select object so it outlives the FixedVector view
-      this->mode_select_->option_ptrs.clear();
+      // Build FixedVector with reserve() first so push_back has capacity
+      FixedVector<const char *> opts;
+      opts.reserve(this->mode_select_->mode_labels.size());
       for (auto &lbl : this->mode_select_->mode_labels)
-          this->mode_select_->option_ptrs.push_back(lbl.c_str());
-      FixedVector<const char *> opts(this->mode_select_->option_ptrs.data(),
-                                     this->mode_select_->option_ptrs.size());
+          opts.push_back(lbl.c_str());
       this->mode_select_->traits.set_options(opts);
       ESP_LOGI(TAG, "loop: set %d options, publishing '%s'",
-               (int)this->mode_select_->option_ptrs.size(), this->pending_mode_label_.c_str());
+               (int)this->mode_select_->mode_labels.size(), this->pending_mode_label_.c_str());
       this->mode_select_->publish_state(this->pending_mode_label_);
       this->pending_mode_label_.clear();
   }
