@@ -7,11 +7,9 @@
 
 namespace esphome::usb_webcam {
 
-class USBWebCamNumber : public number::Number, public Component {
+class USBWebCamNumber : public number::Number {
  public:
   void set_selector(uint8_t selector) { selector_ = selector; }
-  void setup() override {}
-  float get_setup_priority() const override { return setup_priority::LATE; }
 
  protected:
   void control(float value) override;

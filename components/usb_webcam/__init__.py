@@ -26,7 +26,7 @@ AUTO_LOAD = ["camera", "psram", "number"]
 
 usb_webcam_ns = cg.esphome_ns.namespace("usb_webcam")
 USBWebCam = usb_webcam_ns.class_("USBWebCam", cg.PollingComponent, cg.EntityBase)
-USBWebCamNumber = usb_webcam_ns.class_("USBWebCamNumber", number.Number, cg.Component)
+USBWebCamNumber = usb_webcam_ns.class_("USBWebCamNumber", number.Number)
 USBWebCamStreamStartTrigger = usb_webcam_ns.class_(
     "USBWebCamStreamStartTrigger",
     automation.Trigger.template(),
@@ -161,7 +161,6 @@ async def to_code(config):
         cg.add(num_var.traits.set_min_value(-32768))
         cg.add(num_var.traits.set_max_value(32767))
         cg.add(num_var.traits.set_step(1))
-        await cg.register_component(num_var, {})
         cg.add(cg.App.register_number(num_var))
         cg.add(getattr(var, setter)(num_var))
 
