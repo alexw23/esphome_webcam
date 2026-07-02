@@ -169,6 +169,7 @@ class USBWebCam : public camera::Camera {
   USBWebCamFrameSize frame_size;
   uint32_t frame_buffer_size_{65536};
   volatile bool camera_init_done_{false};
+  volatile bool controls_probed_{false};
   bool camera_ready_{false};
   /* -- framerates */
   uint32_t max_update_interval_{1000};

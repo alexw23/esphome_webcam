@@ -432,6 +432,7 @@ void USBWebCam::update_camera_parameters() {
         {0x08, "sharpness",  sharpness_number_},
     };
 
+    global_usb_webcam->controls_probed_ = false;
     for (auto &ctrl : controls) {
         if (!ctrl.number) continue;
         int16_t current, min_val, max_val;
@@ -451,6 +452,7 @@ void USBWebCam::update_camera_parameters() {
         }
         ctrl.number->publish_state(current);
     }
+    global_usb_webcam->controls_probed_ = true;
 }
 
 void USBWebCamNumber::control(float value) {
@@ -466,6 +468,10 @@ void USBWebCamNumber::control(float value) {
 }
 
 void USBWebCam::queue_control_change(uint8_t selector, int16_t value) {
+    if (!controls_probed_) {
+        ESP_LOGW(TAG, "Controls not yet probed, ignoring change for selector 0x%02x", selector);
+        return;
+    }
     for (auto &pc : pending_controls_) {
         if (!pc.pending || pc.selector == selector) {
             pc.selector = selector;
