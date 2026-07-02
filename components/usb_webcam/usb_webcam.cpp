@@ -234,13 +234,16 @@ void USBWebCam::camera_init_task(void *pv) {
   // Populate select options
   if (self->mode_select_) {
       self->mode_select_->modes = modes;
-      std::vector<std::string> options;
+      self->mode_select_->mode_labels.clear();
       for (auto &m : modes) {
           char buf[32];
           snprintf(buf, sizeof(buf), "%dx%d @ %dfps", m.width, m.height, m.fps);
-          options.push_back(buf);
+          self->mode_select_->mode_labels.push_back(buf);
       }
-      self->mode_select_->traits.set_options(options);
+      FixedVector<const char *> opts;
+      for (auto &lbl : self->mode_select_->mode_labels)
+          opts.push_back(lbl.c_str());
+      self->mode_select_->traits.set_options(opts);
   }
 
   // Pick mode: NVS preference or lowest res (modes[0])

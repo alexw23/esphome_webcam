@@ -20,6 +20,7 @@ class USBWebCamSelect : public select::Select {
  public:
   void set_parent(USBWebCam *parent) { parent_ = parent; }
   std::vector<VideoMode> modes;
+  std::vector<std::string> mode_labels;  // keeps label strings alive for traits
 
  protected:
   void control(const std::string &value) override;
