@@ -6,7 +6,10 @@ import esphome.config_validation as cv
 from esphome import automation
 from esphome import pins
 from esphome.const import (
+    CONF_DISABLED_BY_DEFAULT,
+    CONF_ENTITY_CATEGORY,
     CONF_FREQUENCY,
+    CONF_ICON,
     CONF_ID,
     CONF_NAME,
     CONF_RESOLUTION,
@@ -157,16 +160,20 @@ async def to_code(config):
     ]:
         num_id = ID(f"{parent_id}_{ctrl_name}", is_declaration=True, type=USBWebCamNumber)
         num_var = cg.new_Pvariable(num_id)
-        cg.add(num_var.traits.set_min_value(-32768))
-        cg.add(num_var.traits.set_max_value(32767))
-        cg.add(num_var.traits.set_step(1))
-        cg.add(num_var.set_name(ctrl_name.capitalize()))
-        cg.add(num_var.set_object_id(f"{parent_id}_{ctrl_name}"))
-        cg.add(num_var.set_disabled_by_default(False))
-        cg.add(cg.App.register_number(num_var))
+        await number.register_number(
+            num_var,
+            {
+                CONF_NAME: ctrl_name.capitalize(),
+                CONF_DISABLED_BY_DEFAULT: False,
+                CONF_ICON: "",
+                CONF_ENTITY_CATEGORY: "",
+            },
+            min_value=-32768,
+            max_value=32767,
+            step=1,
+        )
         cg.add(getattr(var, setter)(num_var))
 
-    cg.add_define("USE_NUMBER")
     cg.add_define("USE_USB_WEBCAM")
 
     # assert(CORE.is_esp_idf)
