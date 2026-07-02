@@ -168,6 +168,7 @@ async def to_code(config):
                 CONF_DISABLED_BY_DEFAULT: False,
                 CONF_ICON: "",
                 CONF_ENTITY_CATEGORY: "",
+                CONF_MODE: number.NumberMode.NUMBER_MODE_AUTO,
             },
             min_value=-32768,
             max_value=32767,
