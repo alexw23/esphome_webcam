@@ -288,7 +288,10 @@ void USBWebCam::loop() {
       ESP_LOGE(TAG, "stream_start FAILED: %d (%s)", ret, esp_err_to_name(ret));
     } else {
       ESP_LOGI(TAG, "Stream started — waiting for frames from callback");
-      this->update_camera_parameters();
+      xTaskCreate([](void *arg) {
+        static_cast<USBWebCam *>(arg)->update_camera_parameters();
+        vTaskDelete(NULL);
+      }, "cam_ctrl", 4096, this, 3, NULL);
     }
   }
   if (!this->camera_ready_) {
@@ -404,17 +407,16 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
   this->last_update_ = now;
 }
 
-static esp_err_t pu_get(uvc_host_stream_hdl_t hdl, uint8_t unit_id, uint8_t selector, int16_t *out) {
+static esp_err_t pu_req(uvc_host_stream_hdl_t hdl, uint8_t unit_id, uint8_t selector, uint8_t bRequest, int16_t *out) {
     uint8_t data[2] = {0};
-    // bmRequestType=0xA1: device-to-host, class, interface; bRequest=GET_CUR=0x81
-    esp_err_t err = uvc_host_usb_ctrl(hdl, 0xA1, 0x81, (uint16_t)(selector << 8), (uint16_t)(unit_id << 8), 2, data);
-    if (err == ESP_OK) *out = (int16_t)(data[0] | (data[1] << 8));
+    uint8_t bmRequestType = (bRequest == 0x01) ? 0x21 : 0xA1;
+    esp_err_t err = uvc_host_usb_ctrl(hdl, bmRequestType, bRequest, (uint16_t)(selector << 8), (uint16_t)(unit_id << 8), 2, data);
+    if (err == ESP_OK && out) *out = (int16_t)(data[0] | (data[1] << 8));
     return err;
 }
 
 static esp_err_t pu_set(uvc_host_stream_hdl_t hdl, uint8_t unit_id, uint8_t selector, int16_t value) {
     uint8_t data[2] = {(uint8_t)(value & 0xFF), (uint8_t)((value >> 8) & 0xFF)};
-    // bmRequestType=0x21: host-to-device, class, interface; bRequest=SET_CUR=0x01
     return uvc_host_usb_ctrl(hdl, 0x21, 0x01, (uint16_t)(selector << 8), (uint16_t)(unit_id << 8), 2, data);
 }
 
@@ -430,15 +432,25 @@ void USBWebCam::update_camera_parameters() {
     };
 
     for (auto &ctrl : controls) {
-        int16_t current;
-        esp_err_t err = pu_get(stream_hdl, processing_unit_id_, ctrl.selector, &current);
-        if (err != ESP_OK) {
-            ESP_LOGD(TAG, "Control '%s' not supported (PU=%d): %s", ctrl.name, processing_unit_id_, esp_err_to_name(err));
+        int16_t current, min_val, max_val;
+        // GET_CUR=0x81, GET_MIN=0x82, GET_MAX=0x83
+        if (pu_req(stream_hdl, processing_unit_id_, ctrl.selector, 0x81, &current) != ESP_OK) {
+            ESP_LOGD(TAG, "Control '%s' not supported (PU=%d)", ctrl.name, processing_unit_id_);
             continue;
         }
-        ESP_LOGI(TAG, "Control '%s' supported, current=%d", ctrl.name, current);
+        bool has_range = (pu_req(stream_hdl, processing_unit_id_, ctrl.selector, 0x82, &min_val) == ESP_OK &&
+                          pu_req(stream_hdl, processing_unit_id_, ctrl.selector, 0x83, &max_val) == ESP_OK);
+        if (has_range) {
+            ESP_LOGI(TAG, "Control '%s': current=%d, min=%d, max=%d", ctrl.name, current, min_val, max_val);
+        } else {
+            ESP_LOGI(TAG, "Control '%s': current=%d (range unavailable)", ctrl.name, current);
+        }
         if (ctrl.value == INT32_MIN) continue;
-        err = pu_set(stream_hdl, processing_unit_id_, ctrl.selector, (int16_t)ctrl.value);
+        if (has_range && ((int16_t)ctrl.value < min_val || (int16_t)ctrl.value > max_val)) {
+            ESP_LOGE(TAG, "Cannot set '%s'=%d: out of range [%d, %d]", ctrl.name, (int)ctrl.value, min_val, max_val);
+            continue;
+        }
+        esp_err_t err = pu_set(stream_hdl, processing_unit_id_, ctrl.selector, (int16_t)ctrl.value);
         if (err != ESP_OK) {
             ESP_LOGW(TAG, "Failed to set '%s'=%d: %s", ctrl.name, (int)ctrl.value, esp_err_to_name(err));
         } else {
