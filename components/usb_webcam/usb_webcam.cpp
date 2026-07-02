@@ -472,6 +472,7 @@ void USBWebCam::queue_control_change(uint8_t selector, int16_t value) {
         ESP_LOGW(TAG, "Controls not yet probed, ignoring change for selector 0x%02x", selector);
         return;
     }
+    ESP_LOGD(TAG, "Queuing control 0x%02x = %d", selector, value);
     for (auto &pc : pending_controls_) {
         if (!pc.pending || pc.selector == selector) {
             pc.selector = selector;
@@ -495,7 +496,11 @@ void USBWebCam::apply_controls_task(void *arg) {
     if (stream_hdl == NULL) { vTaskDelete(NULL); return; }
 
     ESP_LOGI(TAG, "Applying camera controls (stop/set/start)");
-    uvc_host_stream_stop(stream_hdl);
+    esp_err_t stop_err = uvc_host_stream_stop(stream_hdl);
+    if (stop_err != ESP_OK) {
+        ESP_LOGW(TAG, "stream_stop returned %s, proceeding anyway", esp_err_to_name(stop_err));
+    }
+    vTaskDelay(pdMS_TO_TICKS(100));  // let control endpoint settle
 
     for (auto &pc : self->pending_controls_) {
         if (!pc.pending) continue;
@@ -539,7 +544,9 @@ void USBWebCam::set_idle_update_interval(uint32_t idle_update_interval) {
   this->idle_update_interval_ = idle_update_interval;
 }
 
-USBWebCam::USBWebCam() {}
+USBWebCam::USBWebCam() {
+    memset(pending_controls_, 0, sizeof(pending_controls_));
+}
 
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
