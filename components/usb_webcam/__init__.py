@@ -21,9 +21,9 @@ try:
 except:
   from esphome.core.entity_helpers import setup_entity
 
-DEPENDENCIES = ["esp32", "camera", "number"]
+DEPENDENCIES = ["esp32", "camera"]
 
-AUTO_LOAD = ["camera", "psram"]
+AUTO_LOAD = ["camera", "psram", "number"]
 
 usb_webcam_ns = cg.esphome_ns.namespace("usb_webcam")
 USBWebCam = usb_webcam_ns.class_("USBWebCam", cg.PollingComponent, cg.EntityBase)
