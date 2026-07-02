@@ -13,6 +13,7 @@
 #include "usb_webcam_number.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
+#include <freertos/timers.h>
 #include <vector>
 #include <queue>
 
@@ -129,6 +130,7 @@ class USBWebCam : public camera::Camera {
   /* -- camera controls */
   void set_processing_unit_id(uint8_t id) { processing_unit_id_ = id; }
   uint8_t get_processing_unit_id() const { return processing_unit_id_; }
+  void queue_control_change(uint8_t selector, int16_t value);
   void set_brightness_number(USBWebCamNumber *n) { brightness_number_ = n; }
   void set_contrast_number(USBWebCamNumber *n)   { contrast_number_ = n; }
   void set_saturation_number(USBWebCamNumber *n) { saturation_number_ = n; }
@@ -159,6 +161,8 @@ class USBWebCam : public camera::Camera {
   bool can_return_image_() const;
 
   static void camera_init_task(void *pv);
+  static void apply_timer_cb(TimerHandle_t timer);
+  static void apply_controls_task(void *arg);
 
   /* attributes */
   /* camera configuration */
@@ -170,6 +174,9 @@ class USBWebCam : public camera::Camera {
   uint32_t max_update_interval_{1000};
   uint32_t idle_update_interval_{15000};
   uint8_t processing_unit_id_{2};
+  struct PendingControl { uint8_t selector; int16_t value; bool pending{false}; };
+  PendingControl pending_controls_[5];
+  TimerHandle_t apply_timer_{nullptr};
   USBWebCamNumber *brightness_number_{nullptr};
   USBWebCamNumber *contrast_number_{nullptr};
   USBWebCamNumber *saturation_number_{nullptr};
