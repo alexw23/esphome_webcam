@@ -138,6 +138,7 @@ class USBWebCam : public camera::Camera {
   void add_stream_stop_callback(std::function<void()> &&callback);
 
   ESPPreferenceObject mode_pref_;
+  std::string pending_mode_label_;  // set by init task, published by loop()
 
  protected:
   /* internal methods */

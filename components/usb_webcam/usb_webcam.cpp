@@ -231,7 +231,7 @@ void USBWebCam::camera_init_task(void *pv) {
       return pa != pb ? pa < pb : a.fps < b.fps;
   });
 
-  // Populate select options
+  // Store modes and labels — options/state are applied in loop() on the main thread
   if (self->mode_select_) {
       self->mode_select_->modes = modes;
       self->mode_select_->mode_labels.clear();
@@ -240,10 +240,6 @@ void USBWebCam::camera_init_task(void *pv) {
           snprintf(buf, sizeof(buf), "%dx%d @ %dfps", m.width, m.height, m.fps);
           self->mode_select_->mode_labels.push_back(buf);
       }
-      FixedVector<const char *> opts;
-      for (auto &lbl : self->mode_select_->mode_labels)
-          opts.push_back(lbl.c_str());
-      self->mode_select_->traits.set_options(opts);
   }
 
   // Pick mode: NVS preference or lowest res (modes[0])
@@ -270,11 +266,9 @@ void USBWebCam::camera_init_task(void *pv) {
       self->max_update_interval_ = 1000 / chosen.fps;
       self->set_pu_controls_bitmap(fetch_pu_bitmap(self->get_processing_unit_id()));
 
-      if (self->mode_select_) {
-          char buf[32];
-          snprintf(buf, sizeof(buf), "%dx%d @ %dfps", chosen.width, chosen.height, chosen.fps);
-          self->mode_select_->publish_state(buf);
-      }
+      char buf[32];
+      snprintf(buf, sizeof(buf), "%dx%d @ %dfps", chosen.width, chosen.height, chosen.fps);
+      self->pending_mode_label_ = buf;  // loop() will call set_options + publish_state
   }
 
   self->camera_init_done_ = true;
@@ -356,6 +350,16 @@ void USBWebCam::loop() {
       this->camera_ready_ = true;
     }
   }
+  // Apply mode select options and initial state on the main thread (thread-safe)
+  if (this->mode_select_ && !this->pending_mode_label_.empty() && !this->mode_select_->mode_labels.empty()) {
+      FixedVector<const char *> opts;
+      for (auto &lbl : this->mode_select_->mode_labels)
+          opts.push_back(lbl.c_str());
+      this->mode_select_->traits.set_options(opts);
+      this->mode_select_->publish_state(this->pending_mode_label_);
+      this->pending_mode_label_.clear();
+  }
+
   // Always drain frames to prevent buffer starvation
   if (this->camera_ready_ && this->start_attempted_) {
     request_image(camera::IDLE);
