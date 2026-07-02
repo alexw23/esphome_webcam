@@ -160,10 +160,13 @@ async def to_code(config):
         cg.add(num_var.traits.set_min_value(-32768))
         cg.add(num_var.traits.set_max_value(32767))
         cg.add(num_var.traits.set_step(1))
-        await setup_entity(num_var, {CONF_NAME: ctrl_name.capitalize()})
+        cg.add(num_var.set_name(ctrl_name.capitalize()))
+        cg.add(num_var.set_object_id(f"{parent_id}_{ctrl_name}"))
+        cg.add(num_var.set_disabled_by_default(False))
         cg.add(cg.App.register_number(num_var))
         cg.add(getattr(var, setter)(num_var))
 
+    cg.add_define("USE_NUMBER")
     cg.add_define("USE_USB_WEBCAM")
 
     # assert(CORE.is_esp_idf)
