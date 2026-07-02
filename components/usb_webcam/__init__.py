@@ -42,8 +42,6 @@ USBWebCamStreamStopTrigger = usb_webcam_ns.class_(
     automation.Trigger.template(),
 )
 
-# frames
-CONF_MAX_FRAMERATE = "max_framerate"
 CONF_IDLE_FRAMERATE = "idle_framerate"
 CONF_DROP_FRAME_SIZE = "drop_frame_size"
 CONF_FRAME_BUFFER_SIZE = "frame_buffer_size"
@@ -57,10 +55,6 @@ CONF_ON_STREAM_STOP = "on_stream_stop"
 CONFIG_SCHEMA = cv.ENTITY_BASE_SCHEMA.extend(
     {
         cv.GenerateID(): cv.declare_id(USBWebCam),
-        # framerates
-        cv.Optional(CONF_MAX_FRAMERATE, default="5 fps"): cv.All(
-            cv.framerate, cv.Range(min=0, min_included=False, max=60)
-        ),
         cv.Optional(CONF_IDLE_FRAMERATE, default="0.1 fps"): cv.All(
             cv.framerate, cv.Range(min=0, max=1)
         ),
@@ -99,7 +93,6 @@ async def to_code(config):
     await setup_entity(var, config, "camera")
     await cg.register_component(var, config)
 
-    cg.add(var.set_max_update_interval(1000 / config[CONF_MAX_FRAMERATE]))
     if config[CONF_IDLE_FRAMERATE] == 0:
         cg.add(var.set_idle_update_interval(0))
     else:

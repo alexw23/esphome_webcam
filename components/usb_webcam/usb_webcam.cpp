@@ -781,9 +781,6 @@ bool USBWebCam::can_return_image_() const { return this->current_image_.use_coun
 
 void USBWebCam::set_drop_size(uint32_t drop_size) { s_drop_frame_size = drop_size; }
 void USBWebCam::set_frame_buffer_size(uint32_t frame_buffer_size) { this->frame_buffer_size_ = frame_buffer_size; }
-void USBWebCam::set_max_update_interval(uint32_t max_update_interval) {
-  this->max_update_interval_ = max_update_interval;
-}
 void USBWebCam::set_idle_update_interval(uint32_t idle_update_interval) {
   this->idle_update_interval_ = idle_update_interval;
 }

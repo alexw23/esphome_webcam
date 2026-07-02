@@ -103,8 +103,6 @@ class USBWebCam : public camera::Camera {
   /* setters */
   void set_drop_size(uint32_t drop_size);
   void set_frame_buffer_size(uint32_t frame_buffer_size);
-  /* -- framerates */
-  void set_max_update_interval(uint32_t max_update_interval);
   void set_idle_update_interval(uint32_t idle_update_interval);
   /* -- camera controls */
   void set_processing_unit_id(uint8_t id) { processing_unit_id_ = id; }
