@@ -352,9 +352,9 @@ void USBWebCam::loop() {
   }
   // Apply mode select options and initial state on the main thread (thread-safe)
   if (this->mode_select_ && !this->pending_mode_label_.empty() && !this->mode_select_->mode_labels.empty()) {
-      // Build FixedVector with reserve() first so push_back has capacity
+      // init() pre-allocates capacity so push_back works (FixedVector never reallocates)
       FixedVector<const char *> opts;
-      opts.reserve(this->mode_select_->mode_labels.size());
+      opts.init(this->mode_select_->mode_labels.size());
       for (auto &lbl : this->mode_select_->mode_labels)
           opts.push_back(lbl.c_str());
       this->mode_select_->traits.set_options(opts);
