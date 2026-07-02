@@ -596,43 +596,66 @@ static std::vector<VideoMode> parse_uvc_formats() {
     int num_dev = 0;
     usb_host_device_addr_list_fill(sizeof(addr_list), addr_list, &num_dev);
 
+    ESP_LOGI(TAG, "parse_uvc_formats: scanning %d device(s)", num_dev);
     for (int i = 0; i < num_dev; i++) {
         usb_device_handle_t dev;
-        if (usb_host_device_open(temp_client, addr_list[i], &dev) != ESP_OK) continue;
+        if (usb_host_device_open(temp_client, addr_list[i], &dev) != ESP_OK) {
+            ESP_LOGW(TAG, "parse_uvc_formats: could not open device %d", i);
+            continue;
+        }
 
         const usb_config_desc_t *cfg_desc;
-        if (usb_host_get_active_config_descriptor(dev, &cfg_desc) == ESP_OK) {
-            const uint8_t *p   = (const uint8_t *)cfg_desc;
-            const uint8_t *end = p + cfg_desc->wTotalLength;
+        if (usb_host_get_active_config_descriptor(dev, &cfg_desc) != ESP_OK) {
+            ESP_LOGW(TAG, "parse_uvc_formats: could not get config descriptor for device %d", i);
+            usb_host_device_close(temp_client, dev);
+            continue;
+        }
 
-            while (p + 2 <= end) {
-                uint8_t len  = p[0];
-                uint8_t type = p[1];
-                if (len < 2 || p + len > end) break;
+        ESP_LOGI(TAG, "parse_uvc_formats: descriptor total length=%d", cfg_desc->wTotalLength);
+        const uint8_t *p   = (const uint8_t *)cfg_desc;
+        const uint8_t *end = p + cfg_desc->wTotalLength;
+        int cs_iface_count = 0;
 
-                // CS_INTERFACE = 0x24, VS_FRAME_MJPEG subtype = 0x07
-                // Fixed header is 26 bytes, then frame intervals follow
-                if (type == 0x24 && p[2] == 0x07 && len >= 27) {
+        while (p + 2 <= end) {
+            uint8_t len  = p[0];
+            uint8_t type = p[1];
+            if (len < 2 || p + len > end) break;
+
+            // CS_INTERFACE = 0x24, VS_FRAME_MJPEG subtype = 0x07
+            if (type == 0x24) {
+                cs_iface_count++;
+                uint8_t subtype = p[2];
+                if (subtype == 0x07) {
+                    // VS_FRAME_MJPEG — fixed header is 26 bytes minimum
+                    if (len < 27) {
+                        ESP_LOGW(TAG, "VS_FRAME_MJPEG descriptor too short: len=%d", len);
+                        p += len;
+                        continue;
+                    }
                     uint16_t w = (uint16_t)(p[5] | (p[6] << 8));
                     uint16_t h = (uint16_t)(p[7] | (p[8] << 8));
-                    uint8_t  interval_type = p[25];  // 0=continuous, N=discrete count
+                    uint8_t  interval_type = p[25];
+                    ESP_LOGI(TAG, "VS_FRAME_MJPEG: %dx%d interval_type=%d len=%d", w, h, interval_type, len);
 
                     if (interval_type == 0) {
-                        // Continuous: [26..29]=min, [30..33]=max, [34..37]=step (100ns units)
+                        // Continuous: [26..29]=min, [30..33]=max (100ns units)
                         if (len >= 38) {
                             uint32_t t_min = p[26] | ((uint32_t)p[27] << 8) | ((uint32_t)p[28] << 16) | ((uint32_t)p[29] << 24);
                             uint32_t t_max = p[30] | ((uint32_t)p[31] << 8) | ((uint32_t)p[32] << 16) | ((uint32_t)p[33] << 24);
-                            // Emit common fps values that fall within [min, max]
+                            ESP_LOGI(TAG, "  continuous: t_min=%" PRIu32 " t_max=%" PRIu32, t_min, t_max);
                             static const uint16_t common_fps[] = {5, 10, 15, 20, 25, 30, 60};
                             for (uint16_t fps : common_fps) {
                                 uint32_t t = 10000000u / fps;
                                 if (t >= t_min && t <= t_max) {
                                     modes.push_back({w, h, fps});
+                                    ESP_LOGI(TAG, "  -> %dx%d @ %dfps", w, h, fps);
                                 }
                             }
+                        } else {
+                            ESP_LOGW(TAG, "  continuous descriptor too short for interval fields: len=%d", len);
                         }
                     } else {
-                        // Discrete: N intervals of 4 bytes each starting at p[26]
+                        // Discrete: interval_type intervals of 4 bytes each starting at p[26]
                         for (uint8_t n = 0; n < interval_type; n++) {
                             uint8_t off = 26 + n * 4;
                             if (off + 4 > len) break;
@@ -641,19 +664,20 @@ static std::vector<VideoMode> parse_uvc_formats() {
                             uint16_t fps = (uint16_t)((10000000u + t / 2) / t);
                             if (fps > 0) {
                                 modes.push_back({w, h, fps});
-                                ESP_LOGD(TAG, "Found mode %dx%d @ %dfps (interval=%" PRIu32 ")", w, h, fps, t);
+                                ESP_LOGI(TAG, "  -> %dx%d @ %dfps (interval=%" PRIu32 ")", w, h, fps, t);
                             }
                         }
                     }
                 }
-                p += len;
             }
+            p += len;
         }
+        ESP_LOGI(TAG, "parse_uvc_formats: saw %d CS_INTERFACE descriptors", cs_iface_count);
         usb_host_device_close(temp_client, dev);
     }
 
     usb_host_client_deregister(temp_client);
-    ESP_LOGI(TAG, "Found %d MJPEG video modes", (int)modes.size());
+    ESP_LOGI(TAG, "parse_uvc_formats: found %d MJPEG modes total", (int)modes.size());
     return modes;
 }
 
