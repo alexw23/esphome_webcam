@@ -163,6 +163,7 @@ async def to_code(config):
         await number.register_number(
             num_var,
             {
+                CONF_ID: num_id,
                 CONF_NAME: ctrl_name.capitalize(),
                 CONF_DISABLED_BY_DEFAULT: False,
                 CONF_ICON: "",
