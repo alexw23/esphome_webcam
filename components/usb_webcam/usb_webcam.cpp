@@ -210,6 +210,7 @@ esp_err_t esp_camera_init(USBWebCamFrameSize fs, uint32_t fps, uint32_t frame_bu
   }
 
   global_usb_webcam->stream_opened_ = true;
+  uvc_host_desc_print(stream_hdl);
   ESP_LOGI(TAG, "Stream opened, deferring start to main loop");
   return ESP_OK;
 }
