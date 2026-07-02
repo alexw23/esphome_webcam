@@ -144,7 +144,7 @@ esp_err_t usb_host_drivers_install() {
   return ESP_OK;
 }
 
-static esp_err_t open_stream(uint16_t frame_width, uint16_t frame_height, uint16_t fps, uint32_t frame_buffer_size) {
+static esp_err_t open_stream(uint16_t frame_width, uint16_t frame_height, float fps, uint32_t frame_buffer_size) {
   uvc_host_stream_config_t stream_config = {
       .event_cb = stream_callback,
       .frame_cb = camera_frame_cb,
@@ -257,13 +257,14 @@ void USBWebCam::camera_init_task(void *pv) {
       }
   }
 
-  ESP_LOGI(TAG, "Opening stream at %dx%d @ %dfps", chosen.width, chosen.height, chosen.fps);
-  self->init_error_ = open_stream(chosen.width, chosen.height, chosen.fps, self->frame_buffer_size_);
+  float exact_fps = chosen.interval_100ns ? (10000000.0f / chosen.interval_100ns) : (float)chosen.fps;
+  ESP_LOGI(TAG, "Opening stream at %dx%d @ %.3ffps (interval=%" PRIu32 ")", chosen.width, chosen.height, exact_fps, chosen.interval_100ns);
+  self->init_error_ = open_stream(chosen.width, chosen.height, exact_fps, self->frame_buffer_size_);
 
   if (self->init_error_ == ESP_OK) {
       self->current_width_  = chosen.width;
       self->current_height_ = chosen.height;
-      self->max_update_interval_ = 1000 / chosen.fps;
+      self->max_update_interval_ = chosen.interval_100ns ? (uint32_t)(chosen.interval_100ns / 10000) : (1000 / chosen.fps);
       self->set_pu_controls_bitmap(fetch_pu_bitmap(self->get_processing_unit_id()));
 
       char buf[32];
@@ -466,9 +467,9 @@ void USBWebCam::request_image(camera::CameraRequester requester) {
   this->last_update_ = now;
 }
 
-void USBWebCam::change_video_mode(uint16_t width, uint16_t height, uint16_t fps) {
-    struct Args { USBWebCam *self; uint16_t width, height, fps; };
-    auto *args = new Args{this, width, height, fps};
+void USBWebCam::change_video_mode(uint16_t width, uint16_t height, uint16_t fps, uint32_t interval_100ns) {
+    struct Args { USBWebCam *self; uint16_t width, height, fps; uint32_t interval_100ns; };
+    auto *args = new Args{this, width, height, fps, interval_100ns};
     xTaskCreate([](void *arg) {
         auto *a = static_cast<Args *>(arg);
         ESP_LOGI(TAG, "Changing mode to %dx%d @ %dfps", a->width, a->height, a->fps);
@@ -479,15 +480,16 @@ void USBWebCam::change_video_mode(uint16_t width, uint16_t height, uint16_t fps)
             stream_hdl = NULL;
         }
 
-        esp_err_t ret = open_stream(a->width, a->height, a->fps, a->self->frame_buffer_size_);
+        float exact_fps = a->interval_100ns ? (10000000.0f / a->interval_100ns) : (float)a->fps;
+        esp_err_t ret = open_stream(a->width, a->height, exact_fps, a->self->frame_buffer_size_);
         if (ret != ESP_OK) {
             ESP_LOGE(TAG, "Failed to reopen stream: %s", esp_err_to_name(ret));
         } else {
             a->self->current_width_  = a->width;
             a->self->current_height_ = a->height;
-            a->self->max_update_interval_ = 1000 / a->fps;
+            a->self->max_update_interval_ = a->interval_100ns ? (uint32_t)(a->interval_100ns / 10000) : (1000 / a->fps);
 
-            VideoMode vm{a->width, a->height, a->fps};
+            VideoMode vm{a->width, a->height, a->fps, a->interval_100ns};
             a->self->mode_pref_.save(&vm);
 
             ret = uvc_host_stream_start(stream_hdl);
@@ -655,7 +657,7 @@ static std::vector<VideoMode> parse_uvc_formats() {
                             for (uint16_t fps : common_fps) {
                                 uint32_t t = 10000000u / fps;
                                 if (t >= t_min && t <= t_max) {
-                                    modes.push_back({w, h, fps});
+                                    modes.push_back({w, h, fps, t});
                                     ESP_LOGI(TAG, "  -> %dx%d @ %dfps", w, h, fps);
                                 }
                             }
@@ -671,7 +673,7 @@ static std::vector<VideoMode> parse_uvc_formats() {
                             if (t == 0) continue;
                             uint16_t fps = (uint16_t)((10000000u + t / 2) / t);
                             if (fps > 0) {
-                                modes.push_back({w, h, fps});
+                                modes.push_back({w, h, fps, t});
                                 ESP_LOGI(TAG, "  -> %dx%d @ %dfps (interval=%" PRIu32 ")", w, h, fps, t);
                             }
                         }
@@ -776,7 +778,7 @@ void USBWebCamSelect::control(const std::string &value) {
         snprintf(buf, sizeof(buf), "%dx%d @ %dfps", m.width, m.height, m.fps);
         if (value == buf) {
             publish_state(value);
-            if (parent_) parent_->change_video_mode(m.width, m.height, m.fps);
+            if (parent_) parent_->change_video_mode(m.width, m.height, m.fps, m.interval_100ns);
             return;
         }
     }

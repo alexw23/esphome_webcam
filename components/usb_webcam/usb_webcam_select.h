@@ -13,7 +13,8 @@ class USBWebCam;
 struct VideoMode {
     uint16_t width;
     uint16_t height;
-    uint16_t fps;
+    uint16_t fps;           // rounded, for display and NVS key
+    uint32_t interval_100ns; // exact descriptor interval, for stream open
 };
 
 class USBWebCamSelect : public select::Select {

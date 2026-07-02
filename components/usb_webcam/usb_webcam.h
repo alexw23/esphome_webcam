@@ -111,7 +111,7 @@ class USBWebCam : public camera::Camera {
   void set_pu_controls_bitmap(uint32_t bm) { pu_controls_bitmap_ = bm; }
   void set_stream_button(USBWebCamButton *b) { stream_button_ = b; }
   void set_mode_select(USBWebCamSelect *s) { mode_select_ = s; }
-  void change_video_mode(uint16_t width, uint16_t height, uint16_t fps);
+  void change_video_mode(uint16_t width, uint16_t height, uint16_t fps, uint32_t interval_100ns);
   bool is_streaming() const { return stream_requesters_ != 0; }
   void set_brightness_number(USBWebCamNumber *n) { brightness_number_ = n; }
   void set_contrast_number(USBWebCamNumber *n)   { contrast_number_ = n; }
