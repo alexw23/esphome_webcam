@@ -352,22 +352,15 @@ void USBWebCam::loop() {
   }
   // Apply mode select options and initial state on the main thread (thread-safe)
   if (this->mode_select_ && !this->pending_mode_label_.empty() && !this->mode_select_->mode_labels.empty()) {
-      ESP_LOGI(TAG, "loop: setting %d options, pending='%s'",
-               (int)this->mode_select_->mode_labels.size(), this->pending_mode_label_.c_str());
-      FixedVector<const char *> opts;
-      for (auto &lbl : this->mode_select_->mode_labels) {
-          opts.push_back(lbl.c_str());
-          ESP_LOGI(TAG, "  opt[%d]='%s'", (int)opts.size() - 1, lbl.c_str());
-      }
+      // Build c_str() pointer array on the select object so it outlives the FixedVector view
+      this->mode_select_->option_ptrs.clear();
+      for (auto &lbl : this->mode_select_->mode_labels)
+          this->mode_select_->option_ptrs.push_back(lbl.c_str());
+      FixedVector<const char *> opts(this->mode_select_->option_ptrs.data(),
+                                     this->mode_select_->option_ptrs.size());
       this->mode_select_->traits.set_options(opts);
-      const auto &stored = this->mode_select_->traits.get_options();
-      int stored_count = 0;
-      bool pending_found = false;
-      for (const auto *opt : stored) {
-          if (this->pending_mode_label_ == opt) pending_found = true;
-          stored_count++;
-      }
-      ESP_LOGI(TAG, "loop: traits has %d options, pending found=%s", stored_count, pending_found ? "YES" : "NO");
+      ESP_LOGI(TAG, "loop: set %d options, publishing '%s'",
+               (int)this->mode_select_->option_ptrs.size(), this->pending_mode_label_.c_str());
       this->mode_select_->publish_state(this->pending_mode_label_);
       this->pending_mode_label_.clear();
   }
