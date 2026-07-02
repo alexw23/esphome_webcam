@@ -8,6 +8,7 @@ from esphome import pins
 from esphome.const import (
     CONF_FREQUENCY,
     CONF_ID,
+    CONF_NAME,
     CONF_RESOLUTION,
     CONF_TRIGGER_ID,
 )
@@ -20,9 +21,9 @@ try:
 except:
   from esphome.core.entity_helpers import setup_entity
 
-DEPENDENCIES = ["esp32", "camera"]
+DEPENDENCIES = ["esp32", "camera", "number"]
 
-AUTO_LOAD = ["camera", "psram", "number"]
+AUTO_LOAD = ["camera", "psram"]
 
 usb_webcam_ns = cg.esphome_ns.namespace("usb_webcam")
 USBWebCam = usb_webcam_ns.class_("USBWebCam", cg.PollingComponent, cg.EntityBase)
@@ -156,11 +157,10 @@ async def to_code(config):
     ]:
         num_id = ID(f"{parent_id}_{ctrl_name}", is_declaration=True, type=USBWebCamNumber)
         num_var = cg.new_Pvariable(num_id)
-        cg.add(num_var.set_name(ctrl_name.capitalize()))
-        cg.add(num_var.set_object_id(f"{parent_id}_{ctrl_name}"))
         cg.add(num_var.traits.set_min_value(-32768))
         cg.add(num_var.traits.set_max_value(32767))
         cg.add(num_var.traits.set_step(1))
+        await setup_entity(num_var, {CONF_NAME: ctrl_name.capitalize()})
         cg.add(cg.App.register_number(num_var))
         cg.add(getattr(var, setter)(num_var))
 
