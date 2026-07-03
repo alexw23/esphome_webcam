@@ -479,8 +479,6 @@ void USBWebCam::change_video_mode(uint16_t width, uint16_t height, uint16_t fps,
 
         if (stream_hdl) {
             s_intentional_close = true;
-            uvc_host_stream_stop(stream_hdl);
-            vTaskDelay(pdMS_TO_TICKS(200)); // let in-flight frame callbacks drain before freeing buffers
             uvc_host_stream_close(stream_hdl);
             stream_hdl = NULL;
             s_intentional_close = false;
