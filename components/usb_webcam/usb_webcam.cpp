@@ -61,6 +61,8 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
 
     if (frame->vs_format.format != UVC_VS_FORMAT_MJPEG) return true;
 
+    ESP_LOGD(TAG, "frame_cb: len=%zu %dx%d", frame->data_len, frame->vs_format.h_res, frame->vs_format.v_res);
+
     if (xSemaphoreTake(s_buffer_mutex, 0) == pdTRUE) {
 
         // Only process if we have an empty slot available
@@ -170,7 +172,7 @@ static esp_err_t open_stream(uint16_t frame_width, uint16_t frame_height, float 
           .frame_size = frame_buffer_size,
           .frame_heap_caps = MALLOC_CAP_SPIRAM,
           .number_of_urbs = 4,
-          .urb_size = 10 * 1024,
+          .urb_size = 32 * 1024,
           .user_frame_buffers = NULL,
       },
   };
