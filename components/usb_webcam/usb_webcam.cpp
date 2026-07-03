@@ -61,7 +61,10 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
 
     if (frame->vs_format.format != UVC_VS_FORMAT_MJPEG) return true;
 
-    ESP_LOGD(TAG, "frame_cb: len=%zu %dx%d", frame->data_len, frame->vs_format.h_res, frame->vs_format.v_res);
+    bool eoi = frame->data_len >= 2 &&
+               frame->data[frame->data_len - 2] == 0xFF &&
+               frame->data[frame->data_len - 1] == 0xD9;
+    ESP_LOGD(TAG, "frame_cb: len=%zu %dx%d eoi=%d", frame->data_len, frame->vs_format.h_res, frame->vs_format.v_res, eoi);
 
     if (xSemaphoreTake(s_buffer_mutex, 0) == pdTRUE) {
 
