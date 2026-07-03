@@ -172,7 +172,7 @@ static esp_err_t open_stream(uint16_t frame_width, uint16_t frame_height, float 
       },
       .advanced = {
           .number_of_frame_buffers = 3,
-          .frame_size = frame_buffer_size,
+          .frame_size = std::max(frame_buffer_size, (uint32_t)614400),
           .frame_heap_caps = MALLOC_CAP_SPIRAM,
           .number_of_urbs = 4,
           .urb_size = 32 * 1024,

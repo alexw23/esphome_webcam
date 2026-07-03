@@ -61,8 +61,8 @@ CONFIG_SCHEMA = cv.ENTITY_BASE_SCHEMA.extend(
         cv.Optional(CONF_DROP_FRAME_SIZE, default="7000"): cv.All(
             cv.int_range(min=0, max=100000)
         ),
-        cv.Optional(CONF_FRAME_BUFFER_SIZE, default="65536"): cv.All(
-            cv.int_range(min=10240, max=524288)
+        cv.Optional(CONF_FRAME_BUFFER_SIZE, default="614400"): cv.All(
+            cv.int_range(min=10240, max=2097152)
         ),
         cv.Optional(CONF_PROCESSING_UNIT_ID, default=2): cv.int_range(min=1, max=255),
         cv.Optional(CONF_ON_STREAM_START): automation.validate_automation(
