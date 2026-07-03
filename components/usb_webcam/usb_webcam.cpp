@@ -501,7 +501,7 @@ void USBWebCam::change_video_mode(uint16_t width, uint16_t height, uint16_t fps,
         }
         delete a;
         vTaskDelete(NULL);
-    }, "cam_mode", 4096, args, 3, NULL);
+    }, "cam_mode", 8192, args, 3, NULL);
 }
 
 // UVC 1.1 Table A-14: selector → bmControls bit position
