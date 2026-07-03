@@ -36,6 +36,7 @@ static std::vector<VideoMode> parse_uvc_formats();
 static uint32_t s_drop_frame_size = 0;
 static camera_fb_t s_fb;
 static uvc_host_stream_hdl_t stream_hdl = NULL;
+static volatile bool s_intentional_close = false;
 static int s_frame_cb_count = 0;
 
 void esp_camera_fb_return(camera_fb_t *fb)
@@ -93,8 +94,10 @@ static void stream_callback(const uvc_host_stream_event_data_t *event, void *use
         ESP_LOGE(TAG, "USB error");
         break;
     case UVC_HOST_DEVICE_DISCONNECTED:
-        ESP_LOGI(TAG, "Device disconnected");
-        uvc_host_stream_close(event->device_disconnected.stream_hdl);
+        if (!s_intentional_close) {
+            ESP_LOGI(TAG, "Device disconnected");
+            uvc_host_stream_close(event->device_disconnected.stream_hdl);
+        }
         stream_hdl = NULL;
         break;
     default:
@@ -475,10 +478,12 @@ void USBWebCam::change_video_mode(uint16_t width, uint16_t height, uint16_t fps,
         ESP_LOGI(TAG, "Changing mode to %dx%d @ %dfps", a->width, a->height, a->fps);
 
         if (stream_hdl) {
+            s_intentional_close = true;
             uvc_host_stream_stop(stream_hdl);
             vTaskDelay(pdMS_TO_TICKS(200)); // let in-flight frame callbacks drain before freeing buffers
             uvc_host_stream_close(stream_hdl);
             stream_hdl = NULL;
+            s_intentional_close = false;
         }
 
         float exact_fps = a->interval_100ns ? (10000000.0f / a->interval_100ns) : (float)a->fps;
