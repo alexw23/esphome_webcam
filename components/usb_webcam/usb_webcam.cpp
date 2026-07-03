@@ -34,6 +34,7 @@ static uint32_t fetch_pu_bitmap(uint8_t unit_id);
 static std::vector<VideoMode> parse_uvc_formats();
 
 static uint32_t s_drop_frame_size = 0;
+static uint32_t s_frame_buffer_size = 614400;
 static camera_fb_t s_fb;
 static uvc_host_stream_hdl_t stream_hdl = NULL;
 static volatile bool s_intentional_close = false;
@@ -63,7 +64,7 @@ static bool camera_frame_cb(const uvc_host_frame_t *frame, void *ptr)
     if (xSemaphoreTake(s_buffer_mutex, 0) == pdTRUE) {
 
         // Only process if we have an empty slot available
-        if (!s_free_buffers.empty()) {
+        if (!s_free_buffers.empty() && frame->data_len <= s_frame_buffer_size) {
             uint8_t *buf = s_free_buffers.front();
             s_free_buffers.pop();
             memcpy(buf, frame->data, frame->data_len);
@@ -166,7 +167,7 @@ static esp_err_t open_stream(uint16_t frame_width, uint16_t frame_height, float 
       },
       .advanced = {
           .number_of_frame_buffers = 3,
-          .frame_size = 614400,
+          .frame_size = frame_buffer_size,
           .frame_heap_caps = MALLOC_CAP_SPIRAM,
           .number_of_urbs = 4,
           .urb_size = 10 * 1024,
@@ -304,6 +305,7 @@ void USBWebCam::setup() {
 
   xTaskCreatePinnedToCore(USBWebCam::camera_init_task, "cam_init", 4096, this, 5, NULL, 0);
 
+  s_frame_buffer_size = frame_buffer_size_;
   for (int i = 0; i < NUM_BUFFERS; i++) {
     uint8_t *buf = (uint8_t *)heap_caps_aligned_alloc(16, frame_buffer_size_, MALLOC_CAP_SPIRAM);
     if (buf) {

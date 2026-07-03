@@ -148,7 +148,7 @@ class USBWebCam : public camera::Camera {
   static void camera_init_task(void *pv);
 
   /* attributes */
-  uint32_t frame_buffer_size_{65536};
+  uint32_t frame_buffer_size_{614400};
   volatile bool camera_init_done_{false};
   volatile bool controls_probed_{false};
   bool camera_ready_{false};
